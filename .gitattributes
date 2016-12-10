@@ -1,0 +1,3 @@
+# do not include the git files when archiving
+.gitattributes export-ignore
+.gitignore export-ignore

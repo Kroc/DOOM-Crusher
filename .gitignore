@@ -1,0 +1,11 @@
+# ignore everything, and only include the files we want
+*
+!.gitignore
+!.gitattributes
+
+!bin
+
+!*.bat
+
+!README.md
+!icon.png
