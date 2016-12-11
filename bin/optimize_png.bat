@@ -86,8 +86,9 @@ SET EXEC_PNGCRUSH="%BIN_PNGCRUSH%" -nobail -blacken -brute -keep grAb -keep alPh
 
 REM # deflopt
 SET "BIN_DEFLOPT=%HERE%\deflopt\DeflOpt.exe"
+REM # /a	: examine the file contents to determine if it's compressed (rather than extension alone)
 REM # /k	: keep extra chunks (we must preserve "grAb" and "alPh" for DOOM)
-SET EXEC_DEFLOPT="%BIN_DEFLOPT%" /k "%~1"
+SET EXEC_DEFLOPT="%BIN_DEFLOPT%" /a /k "%~1"
 
 REM # display file name and current file size
 CALL :status_oldsize "%~1"

@@ -167,7 +167,7 @@ REM # deflopt location
 SET "BIN_DEFLOPT=%HERE%\deflopt\DeflOpt.exe"
 REM # running deflopt can shave a few more bytes off of any DEFLATE-based content
 REM # if this failed, just continue, the original won't have been overwritten
-"%BIN_DEFLOPT%" "%FILE%"  >NUL 2>&1
+"%BIN_DEFLOPT%" /a "%FILE%"  >NUL 2>&1
 
 REM # clean-up:
 REM --------------------------------------------------------------------------------------------------------------------
