@@ -6,7 +6,7 @@ Shrinks DOOM resource files: PK3s (ZIP files), WADs, PNGs & JPGs.
 
 Simply drag-n-drop any file, folder, or multiple-selection thereof on top of the "doom-crusher.bat" file and DOOM Crusher will recursively optimize anything it can recognise.
 
-For bugs, suggestions and feedback please either file an issue on the [GitHub](https://github.com/Kroc/DOOM-Crusher/issues) page or mail <kroc+doom@camendesign.com> 
+For bugs, suggestions and feedback please either file an issue on the [GitHub](https://github.com/Kroc/DOOM-Crusher/issues) page or mail kroc+doom@camendesign.com
 
 ## Samples: ##
 
