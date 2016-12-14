@@ -63,6 +63,7 @@ IF "%~1" == "" (
 REM ====================================================================================================================
 ECHO:
 ECHO doom-crusher.bat : v1
+ECHO feedback: github.com/Kroc/DOOM-Crusher or kroc+doom@camendesign.com
 ECHO ###############################################################################
 
 REM # our component scripts
