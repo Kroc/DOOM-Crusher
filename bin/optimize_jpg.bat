@@ -50,12 +50,14 @@ REM # path of this script
 SET "HERE=%~dp0"
 IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
 
-REM # location of the JPEGtran executable
-SET "BIN_JPEG=%HERE%\jpegtran\jpegtran.exe"
+REM # absolute path of the PNG file
+SET "FILE=%~dpnx1"
+
 REM # jpegtran:
+SET "BIN_JPEG=%HERE%\jpegtran\jpegtran.exe"
 REM # -optimize		: optimize without quality loss
 REM # -copy none	: don't keep any metadata
-SET EXEC_JPEGTRAN="%BIN_JPEG%" -optimize -copy none "%~1" "%~1"
+SET EXEC_JPEGTRAN="%BIN_JPEG%" -optimize -copy none "%FILE%" "%FILE%"
 
 REM --------------------------------------------------------------------------------------------------------------------
 REM # display file name and current file size
@@ -66,10 +68,6 @@ REM # do the actual optimization
 IF ERRORLEVEL 1 (
 	REM # cap the status line
 	ECHO ^^!! error ^<pngout^>
-	REM # redo the optimization to show the error with output
-	ECHO:
-	%EXEC_JPEGTRAN%
-	ECHO:
 ) ELSE (
 	REM # cap status line with the new file size
 	CALL :status_newsize "%~1"

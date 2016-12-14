@@ -6,6 +6,32 @@ REM # optimizes a PK3 (DOOM WAD) file. This is a zip-file containing DOOM resour
 
 REM # %1 - filepath to a PK3 file
 
+REM # path of this script
+REM # (do this before using `SHIFT`)
+SET "HERE=%~dp0"
+IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
+
+REM # default options
+SET "DO_PNG=1"
+SET "DO_JPG=1"
+
+:options
+REM --------------------------------------------------------------------------------------------------------------------
+REM # use "/NOPNG" to disable PNG processing (the slowest part)
+IF /I "%~1" == "/NOPNG" (
+	REM # turn off PNG processing
+	SET "DO_PNG=0"
+	REM # check for more options
+	SHIFT & GOTO :options
+)
+REM # use "/NOJPG" to disable JPEG processing
+IF /I "%~1" == "/NOJPG" (
+	REM # turn off JPEG processing
+	SET "DO_JPG=0"
+	REM # check for more options
+	SHIFT & GOTO :options
+)
+
 REM # any parameter?
 REM --------------------------------------------------------------------------------------------------------------------
 IF "%~1" == "" (
@@ -54,29 +80,54 @@ IF /I "%PROCESSOR_ARCHITECTURE%" == "EM64T" SET "WINBIT=64"	& REM # Itanium
 IF /I "%PROCESSOR_ARCHITECTURE%" == "AMD64" SET "WINBIT=64"	& REM # Regular x64
 IF /I "%PROCESSOR_ARCHITEW6432%" == "AMD64" SET "WINBIT=64"	& REM # 32-bit CMD on a 64-bit system (WOW64)
 
-REM # path of this script
-SET "HERE=%~dp0"
-IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
-
 REM # select 7Zip executable
-IF "%WINBIT%" == "64" SET "BIN_7ZA=%HERE%\7za\7za_x64.exe"
-IF "%WINBIT%" == "32" SET "BIN_7ZA=%HERE%\7za\7za.exe"
+IF "%WINBIT%" == "64" SET BIN_7ZA="%HERE%\7za\7za_x64.exe"
+IF "%WINBIT%" == "32" SET BIN_7ZA="%HERE%\7za\7za.exe"
+
+REM # our component scripts
+SET OPTIMIZE_WAD="%HERE%\optimize_wad.bat"
+SET OPTIMIZE_PNG="%HERE%\optimize_png.bat"
+SET OPTIMIZE_JPG="%HERE%\optimize_jpg.bat"
+
+REM # if we're skipping PNGs/JPGs, pass this requirement on to the WAD handler
+IF %DO_PNG% EQU 0 SET OPTIMIZE_WAD=%OPTIMIZE_WAD% /NOPNG
+IF %DO_JPG% EQU 0 SET OPTIMIZE_WAD=%OPTIMIZE_WAD% /NOJPG
 
 REM # display file name and current file size
 CALL :status_oldsize "%~1"
 
 REM # absolute path of the PK3 file
 SET "FILE=%~dpnx1"
-REM # temporary folder name used to extract the PK3/WAD
+REM # temporary folder used to extract the PK3/WAD
 SET "TEMP_DIR=%TEMP%\%~nx1"
+REM # temporary file used during repacking;
+REM # this must use a ZIP extension or 7ZIP borks
+SET "TEMP_FILE=%TEMP_DIR%\%~n1.zip"
 
 REM # clean up any previous attempt
 REM --------------------------------------------------------------------------------------------------------------------
-IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
+REM # remove the zip file created when repacking -- we do not want to "update" this file
+IF EXIST "%TEMP_FILE%" (
+	REM # try remove the file
+	DEL /F "%TEMP_FILE%"  >NUL 2>&1
+	REM # if that failed:
+	IF !ERRORLEVEL! GEQ 1 (
+		ECHO ^^!! error ^<del^>
+		ECHO ===============================================================================
+		ECHO:
+		ECHO ERROR: Could not remove file:
+		ECHO %TEMP_FILE%
+		ECHO:
+		EXIT /B 1
+	)
+)
+
+REM # remove the temporary directory where the PK3 was unpacked to
+IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%" >NUL 2>&1
 IF EXIST "%TEMP_DIR%" (
 	REM # attempt a second time, this is intentional:
 	REM # http://stackoverflow.com/questions/22948189/batch-getting-the-directory-is-not-empty-on-rmdir-command
-	RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
+	RMDIR /S /Q "%TEMP_DIR%" >NUL 2>&1
 	REM # could not clean up?
 	IF ERRORLEVEL 1 (
 		ECHO ^^!! error ^<rmdir^>
@@ -85,7 +136,6 @@ IF EXIST "%TEMP_DIR%" (
 		ECHO ERROR: Could not remove directory:
 		ECHO %TEMP_DIR%
 		ECHO:
-		RMDIR /Q "%TEMP_DIR%"
 		EXIT /B 1
 	)
 )
@@ -93,7 +143,7 @@ IF EXIST "%TEMP_DIR%" (
 REM # create the temporary directory
 IF NOT EXIST "%TEMP_DIR%" (
 	REM # try create the directory
-	MKDIR "%TEMP_DIR%"  >NUL 2>&1
+	MKDIR "%TEMP_DIR%" >NUL 2>&1
 	REM # failed?
 	IF ERRORLEVEL 1 (
 		ECHO ^^!! error ^<mkdir^>
@@ -102,7 +152,6 @@ IF NOT EXIST "%TEMP_DIR%" (
 		ECHO ERROR: Could not create directory:
 		ECHO %TEMP_DIR%
 		ECHO:
-		MKDIR "%TEMP_DIR%"
 		EXIT /B 1
 	)
 )
@@ -110,14 +159,14 @@ IF NOT EXIST "%TEMP_DIR%" (
 REM # use 7zip to unpack the PK3 file
 REM --------------------------------------------------------------------------------------------------------------------
 <NUL (SET /P "$=: unpacking...")
-"%BIN_7ZA%" x -aoa -o"%TEMP_DIR%" -tzip -- "%FILE%"  >NUL 2>&1
+%BIN_7ZA% x -aos -o"%TEMP_DIR%" -tzip -- "%FILE%" >NUL 2>&1
 IF ERRORLEVEL 1 (
 	REM # cap the status line
 	ECHO  err^^!!
 	ECHO ===============================================================================
 	REM # retry with output visible
 	ECHO:
-	"%BIN_7ZA%" x -aoa -o"%TEMP_DIR%" -tzip -- "%FILE%"
+	%BIN_7ZA% x -aos -o"%TEMP_DIR%" -tzip -- "%FILE%"
 	ECHO:
 	REM # clean up the temporary directory
 	IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
@@ -136,15 +185,36 @@ REM ----------------------------------------------------------------------------
 REM # find all optimizable files:
 REM # you can't use variables in the `FOR /R` parameter
 PUSHD "%TEMP_DIR%"
-FOR /R "." %%Z IN (*.jpg;*.jpeg) DO (
-	CALL "%HERE%\optimize_jpg.bat" "%%~dpnxZ"
+REM # JPEG files:
+IF %DO_JPG% EQU 1 (
+	FOR /R "." %%Z IN (*.jpg;*.jpeg) DO CALL %OPTIMIZE_JPG% "%%~dpnxZ"
 )
-FOR /R "." %%Z IN (*.png) DO (
-	CALL "%HERE%\optimize_png.bat" "%%~dpnxZ"
+REM # PNG files:
+IF %DO_PNG% EQU 1 (
+	FOR /R "." %%Z IN (*.png) DO CALL %OPTIMIZE_PNG% "%%~dpnxZ"
 )
+REM # WAD files:
 FOR /R "." %%Z IN (*.wad) DO (
-	CALL "%HERE%\optimize_wad.bat" "%%~dpnxZ"
+	CALL %OPTIMIZE_WAD% "%%~dpnxZ"
 )
+REM # files without an extension
+FOR /R "." %%Z IN (*.) DO (
+	REM # READ the first 1021 bytes of the lump.
+	REM # a truly brilliant solution, thanks to:
+	REM # http://stackoverflow.com/a/7827243
+	SET "HEADER=" & SET /P HEADER=< "%%~Z"
+	REM # a JPEG file?
+	IF %DO_JPG% EQU 1 (
+		IF "!HEADER:~0,2!" == "ÿØ"  CALL %OPTIMIZE_JPG% "%%~dpnxZ"
+	)
+	REM # a PNG file?
+	IF %DO_PNG% EQU 1 (
+		IF "!HEADER:~1,3!" == "PNG" CALL %OPTIMIZE_PNG% "%%~dpnxZ"
+	)
+	REM # a WAD file?
+	IF "!HEADER:~1,3!" == "WAD" CALL %OPTIMIZE_WAD% "%%~dpnxZ"
+)
+
 POPD
 
 REM # repack PK3:
@@ -153,7 +223,20 @@ REM # switch to the temporary directory so that the PK3 files are
 REM # at the base of the ZIP file rather than in a sub-folder
 PUSHD "%TEMP_DIR%"
 REM # use 7Zip to do the ZIP compression as it has options to maximize compression
-"%BIN_7ZA%" a -bso0 -bsp1 -tzip -r -mx9 -mfb258 -mpass15 "%FILE%" -- *
+%BIN_7ZA% a "%TEMP%\%~n1.zip" -bso0 -bsp1 -tzip -r -mx9 -mfb258 -mpass15 -- *
+IF ERRORLEVEL 1 (
+	ECHO:
+	ECHO ERROR: Could not repack the PK3.
+	ECHO:
+	EXIT /B 1
+)
+COPY /Y "%TEMP%\%~n1.zip" "%FILE%"
+IF ERRORLEVEL 1 (
+	ECHO:
+	ECHO ERROR: Could not replace the original PK3 with the new version.
+	ECHO:
+	EXIT /B 1
+)
 
 REM # finished with the PK3 file contents
 ECHO ===============================================================================

@@ -6,6 +6,11 @@ REM # optimizes a single PNG file
 
 REM # %1 - filepath to a PNG file
 
+REM # path of this script
+REM # (do this before using `SHIFT`)
+SET "HERE=%~dp0"
+IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
+
 REM # any parameter?
 REM --------------------------------------------------------------------------------------------------------------------
 IF "%~1" == "" (
@@ -54,22 +59,23 @@ IF /I "%PROCESSOR_ARCHITECTURE%" == "EM64T" SET "WINBIT=64"	& REM # Itanium
 IF /I "%PROCESSOR_ARCHITECTURE%" == "AMD64" SET "WINBIT=64"	& REM # Regular x64
 IF /I "%PROCESSOR_ARCHITEW6432%" == "AMD64" SET "WINBIT=64"	& REM # 32-bit CMD on a 64-bit system (WOW64)
 
-REM # path of this script
-SET "HERE=%~dp0"
-IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
+REM # absolute path of the PNG file
+SET "FILE=%~dpnx1"
 
 REM # optipng:
 SET "BIN_OPTIPNG=%HERE%\optipng\optipng.exe"
 REM # -clobber  : overwrite input file
+REM # -fix	: try to fix/work-around CRC errors
 REM # -07       : maximum compression level
 REM # -i0       : non-interlaced
-SET EXEC_OPTIPNG="%BIN_OPTIPNG%" -clobber -o7 -i0 -- "%~1"
+SET EXEC_OPTIPNG="%BIN_OPTIPNG%" -clobber -fix -o7 -i0 -- "%FILE%"
 
 REM # pngout:
 SET "BIN_PNGOUT=%HERE%\pngout\pngout.exe"
 REM # /k...	: keep chunks
 REM # /y	: assume yes (overwrite)
-SET EXEC_PNGOUT="%BIN_PNGOUT%" "%~1" /kgrAb,alPh /y
+REM # /q	: quiet
+SET EXEC_PNGOUT="%BIN_PNGOUT%" "%FILE%" /kgrAb,alPh /y /q
 
 REM # pngcrush:
 IF "%WINBIT%" == "64" SET "BIN_PNGCRUSH=%HERE%\pngcrush\pngcrush_w64.exe"
@@ -82,13 +88,13 @@ REM # -l 9	: maximum compression level
 REM # -noforce	: make certain not to overwrite smaller file with larger one
 REM # -ow	: overwrite the original file
 REM # -reduce	: try reducing colour-depth if possible
-SET EXEC_PNGCRUSH="%BIN_PNGCRUSH%" -nobail -blacken -brute -keep grAb -keep alPh -l 9 -noforce -ow -reduce "%~1"
+SET EXEC_PNGCRUSH="%BIN_PNGCRUSH%" -nobail -blacken -brute -keep grAb -keep alPh -l 9 -noforce -ow -reduce "%FILE%"
 
-REM # deflopt
+REM # deflopt:
 SET "BIN_DEFLOPT=%HERE%\deflopt\DeflOpt.exe"
 REM # /a	: examine the file contents to determine if it's compressed (rather than extension alone)
 REM # /k	: keep extra chunks (we must preserve "grAb" and "alPh" for DOOM)
-SET EXEC_DEFLOPT="%BIN_DEFLOPT%" /a /k "%~1"
+SET EXEC_DEFLOPT="%BIN_DEFLOPT%" /a /k "%FILE%"
 
 REM # display file name and current file size
 CALL :status_oldsize "%~1"
@@ -97,14 +103,11 @@ REM # optipng:
 REM --------------------------------------------------------------------------------------------------------------------
 IF EXIST "%BIN_OPTIPNG%" (
 	REM # execute optipng
-	%EXEC_OPTIPNG%  >NUL 2>&1
-	REM # if this fails do it again so as to show the output
+	%EXEC_OPTIPNG% >NUL 2>&1
+	REM # if this fails:
 	IF ERRORLEVEL 1 (
 		REM # cap the status line
 		ECHO ^^!! error ^<optipng^>
-		ECHO:
-		%EXEC_OPTIPNG%
-		ECHO:
 		REM # reprint the status line for the next iteration
 		CALL :status_oldsize "%~1"
 	)
@@ -114,16 +117,11 @@ REM # pngout:
 REM --------------------------------------------------------------------------------------------------------------------
 IF EXIST "%BIN_PNGOUT%" (
 	REM # execute pngout
-	REM # /q : quiet
-	%EXEC_PNGOUT% /q  >NUL 2>&1
-	REM # if this fails do it again so as to show the output
+	%EXEC_PNGOUT% >NUL 2>&1
+	REM # if this fails:
 	IF %ERRORLEVEL% EQU 1 (
 		REM # cap the status line
 		ECHO ^^!! error ^<pngout^>
-		ECHO:
-		REM # /v : verbose
-		%EXEC_PNGOUT% /v
-		ECHO:
 		REM # reprint the status line for the next iteration
 		CALL :status_oldsize "%~1"
 	)
@@ -133,14 +131,11 @@ REM # pngcrush:
 REM --------------------------------------------------------------------------------------------------------------------
 IF EXIST "%BIN_PNGCRUSH%" (
 	REM # execute pngcrush
-	%EXEC_PNGCRUSH%  >NUL 2>&1
-	REM # if this fails do it again so as to show the output
+	%EXEC_PNGCRUSH% >NUL 2>&1
+	REM # if this fails:
 	IF ERRORLEVEL 1 (
 		REM # cap the status line
 		ECHO ^^!! error ^<pngcrush^>
-		ECHO:
-		%EXEC_PNGCRUSH%
-		ECHO:
 		REM # reprint the status line for the next iteration
 		CALL :status_oldsize "%~1"
 	)
@@ -150,14 +145,11 @@ REM # deflate optimization:
 REM --------------------------------------------------------------------------------------------------------------------
 IF EXIST "%BIN_DEFLOPT%" (
 	REM # execute deflopt
-	%EXEC_DEFLOPT%  >NUL 2>&1
-	REM # if this fails do it again so as to show the output
+	%EXEC_DEFLOPT% >NUL 2>&1
+	REM # if this fails:
 	IF ERRORLEVEL 1 (
 		REM # cap the status line
 		ECHO ^^!! error ^<deflopt^>
-		ECHO:
-		%EXEC_DEFLOPT%
-		ECHO:
 		GOTO:EOF
 	)
 )
