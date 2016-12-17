@@ -141,20 +141,22 @@ IF %DO_JPG% EQU 1 (
 
 REM # no file extension, or not a known file extension? -- examine contents
 REM --------------------------------------------------------------------------------------------------------------------
-REM # READ the first 1021 bytes of the lump.
-REM # a truly brilliant solution, thanks to:
-REM # http://stackoverflow.com/a/7827243
-SET "HEADER=" & SET /P HEADER=< "%~dpnx1"
-REM # a JPEG file?
-IF %DO_JPG% EQU 1 (
-	IF "%HEADER:~0,2%" == "ÿØ"  CALL %OPTIMIZE_JPG% "%~dpnx1"
+IF "%~x1" == "" (
+	REM # READ the first 1021 bytes of the lump.
+	REM # a truly brilliant solution, thanks to:
+	REM # http://stackoverflow.com/a/7827243
+	SET "HEADER=" & SET /P HEADER=< "%~dpnx1"
+	REM # a JPEG file?
+	IF %DO_JPG% EQU 1 (
+		IF "!HEADER:~0,2!" == "ÿØ"  CALL %OPTIMIZE_JPG% "%~dpnx1"
+	)
+	REM # a PNG file?
+	IF %DO_PNG% EQU 1 (
+		IF "!HEADER:~1,3!" == "PNG" CALL %OPTIMIZE_PNG% "%~dpnx1"
+	)
+	REM # a WAD file?
+	IF "!HEADER:~1,3!" == "WAD" CALL %OPTIMIZE_WAD% "%~dpnx1"
 )
-REM # a PNG file?
-IF %DO_PNG% EQU 1 (
-	IF "%HEADER:~1,3%" == "PNG" CALL %OPTIMIZE_PNG% "%~dpnx1"
-)
-REM # a WAD file?
-IF "%HEADER:~1,3%" == "WAD" CALL %OPTIMIZE_WAD% "%~dpnx1"
 
 
 :next_param

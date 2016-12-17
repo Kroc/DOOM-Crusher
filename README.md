@@ -10,10 +10,11 @@ For bugs, suggestions and feedback please either file an issue on the [GitHub](h
 
 ## Samples: ##
 
-| WAD             |   Original (B) | (MB)     |   Crushed (B) | (MB)     | Delta
-|-----------------|---------------:|---------:|--------------:|---------:|----------:
-| [boa_c1.pk3][B] |  373,344,372 B | 356.0 MB | 300,256,005 B | 286.3 MB | -69.06 MB
-| [DUMP-3.PK3][D] |   74,526,263 B |  71.0 MB |  68,149,144 B |  64.9 MB |  -6.08 MB
+| WAD                 |   Original (B) | (MB)     |   Crushed (B) | (MB)     |    Delta
+|---------------------|---------------:|---------:|--------------:|---------:|----------:
+| [boa_c1.pk3][A]     |  373,344,372 B | 356.0 MB | 300,256,005 B | 286.3 MB | -69.06 MB
+| [DUMP-3.PK3][B]     |   74,526,263 B |  71.0 MB |  68,149,144 B |  64.9 MB |  -6.08 MB
+| [brutalv20b.pk3][C] |   37,046,275 B |  35.3 MB |  36,379,722 B |  34.7 MB |  -0.64 MB
 
 ## Methodolody ##
 
@@ -55,5 +56,6 @@ After the contents have been optimized, the PK3 file is repacked using [7Zip][7]
 [6]: https://soulsphere.org/projects/wadptr/
 [7]: http://www.7-zip.org/
 
-[B]: http://boa.realm667.com/
-[D]: http://forum.zdoom.org/viewtopic.php?f=19&t=52276&sid=1cdc5a0e07f76597c907dc82b9679339&start=1335
+[A]: http://boa.realm667.com/
+[B]: http://forum.zdoom.org/viewtopic.php?f=19&t=52276&sid=1cdc5a0e07f76597c907dc82b9679339&start=1335
+[C]: http://www.moddb.com/mods/brutal-doom
