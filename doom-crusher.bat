@@ -1,6 +1,6 @@
 @ECHO OFF
 
-REM # doom-crusher.bat : v1
+REM # doom-crusher.bat : v1.0.1
 REM ====================================================================================================================
 REM # optimize DOOM-related files: PK3 / WAD / PNG / JPG
 
