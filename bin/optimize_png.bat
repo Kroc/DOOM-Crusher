@@ -53,14 +53,16 @@ REM ============================================================================
 REM # we cannot get the updated size of the file without just-in-time variable expansion
 SETLOCAL ENABLEDELAYEDEXPANSION
 
+REM # absolute path of the PNG file
+SET "PNG_FILE=%~f1"
+
+REM --------------------------------------------------------------------------------------------------------------------
+
 REM # detect 32-bit or 64-bit Windows
 SET "WINBIT=32"
 IF /I "%PROCESSOR_ARCHITECTURE%" == "EM64T" SET "WINBIT=64"	& REM # Itanium
 IF /I "%PROCESSOR_ARCHITECTURE%" == "AMD64" SET "WINBIT=64"	& REM # Regular x64
 IF /I "%PROCESSOR_ARCHITEW6432%" == "AMD64" SET "WINBIT=64"	& REM # 32-bit CMD on a 64-bit system (WOW64)
-
-REM # absolute path of the PNG file
-SET "FILE=%~dpnx1"
 
 REM # optipng:
 SET "BIN_OPTIPNG=%HERE%\optipng\optipng.exe"
@@ -68,14 +70,14 @@ REM # -clobber  : overwrite input file
 REM # -fix	: try to fix/work-around CRC errors
 REM # -07       : maximum compression level
 REM # -i0       : non-interlaced
-SET EXEC_OPTIPNG="%BIN_OPTIPNG%" -clobber -fix -o7 -i0 -- "%FILE%"
+SET EXEC_OPTIPNG="%BIN_OPTIPNG%" -clobber -fix -o7 -i0 -- "%PNG_FILE%"
 
 REM # pngout:
 SET "BIN_PNGOUT=%HERE%\pngout\pngout.exe"
 REM # /k...	: keep chunks
 REM # /y	: assume yes (overwrite)
 REM # /q	: quiet
-SET EXEC_PNGOUT="%BIN_PNGOUT%" "%FILE%" /kgrAb,alPh /y /q
+SET EXEC_PNGOUT="%BIN_PNGOUT%" "%PNG_FILE%" /kgrAb,alPh /y /q
 
 REM # pngcrush:
 IF "%WINBIT%" == "64" SET "BIN_PNGCRUSH=%HERE%\pngcrush\pngcrush_w64.exe"
@@ -88,16 +90,25 @@ REM # -l 9	: maximum compression level
 REM # -noforce	: make certain not to overwrite smaller file with larger one
 REM # -ow	: overwrite the original file
 REM # -reduce	: try reducing colour-depth if possible
-SET EXEC_PNGCRUSH="%BIN_PNGCRUSH%" -nobail -blacken -brute -keep grAb -keep alPh -l 9 -noforce -ow -reduce "%FILE%"
+SET EXEC_PNGCRUSH="%BIN_PNGCRUSH%" -nobail -blacken -brute -keep grAb -keep alPh -l 9 -noforce -ow -reduce "%PNG_FILE%"
 
 REM # deflopt:
 SET "BIN_DEFLOPT=%HERE%\deflopt\DeflOpt.exe"
 REM # /a	: examine the file contents to determine if it's compressed (rather than extension alone)
 REM # /k	: keep extra chunks (we must preserve "grAb" and "alPh" for DOOM)
-SET EXEC_DEFLOPT="%BIN_DEFLOPT%" /a /k "%FILE%"
+SET EXEC_DEFLOPT="%BIN_DEFLOPT%" /a /k "%PNG_FILE%"
 
 REM # display file name and current file size
-CALL :status_oldsize "%~1"
+CALL :status_oldsize "%PNG_FILE%"
+
+REM # done this file before?
+REM --------------------------------------------------------------------------------------------------------------------
+CALL "%HERE%\hash_check.bat" "%PNG_FILE%"
+REM # the file is in the hash-cache, we can skip it
+IF %ERRORLEVEL% EQU 0 (
+	ECHO : skipped ^(cache^)
+	EXIT /B 0
+)
 
 REM # optipng:
 REM --------------------------------------------------------------------------------------------------------------------
@@ -105,11 +116,11 @@ IF EXIST "%BIN_OPTIPNG%" (
 	REM # execute optipng
 	%EXEC_OPTIPNG% >NUL 2>&1
 	REM # if this fails:
-	IF ERRORLEVEL 1 (
+	IF !ERRORLEVEL! NEQ 0 (
 		REM # cap the status line
 		ECHO ^^!! error ^<optipng^>
 		REM # reprint the status line for the next iteration
-		CALL :status_oldsize "%~1"
+		CALL :status_oldsize "%PNG_FILE%"
 	)
 )
 
@@ -119,11 +130,11 @@ IF EXIST "%BIN_PNGOUT%" (
 	REM # execute pngout
 	%EXEC_PNGOUT% >NUL 2>&1
 	REM # if this fails:
-	IF %ERRORLEVEL% EQU 1 (
+	IF !ERRORLEVEL! NEQ 0 (
 		REM # cap the status line
 		ECHO ^^!! error ^<pngout^>
 		REM # reprint the status line for the next iteration
-		CALL :status_oldsize "%~1"
+		CALL :status_oldsize "%PNG_FILE%"
 	)
 )
 
@@ -133,11 +144,11 @@ IF EXIST "%BIN_PNGCRUSH%" (
 	REM # execute pngcrush
 	%EXEC_PNGCRUSH% >NUL 2>&1
 	REM # if this fails:
-	IF ERRORLEVEL 1 (
+	IF !ERRORLEVEL! NEQ 0 (
 		REM # cap the status line
 		ECHO ^^!! error ^<pngcrush^>
 		REM # reprint the status line for the next iteration
-		CALL :status_oldsize "%~1"
+		CALL :status_oldsize "%PNG_FILE%"
 	)
 )
 
@@ -147,43 +158,51 @@ IF EXIST "%BIN_DEFLOPT%" (
 	REM # execute deflopt
 	%EXEC_DEFLOPT% >NUL 2>&1
 	REM # if this fails:
-	IF ERRORLEVEL 1 (
+	IF !ERRORLEVEL! NEQ 0 (
 		REM # cap the status line
 		ECHO ^^!! error ^<deflopt^>
-		GOTO:EOF
+		EXIT /B 0
 	)
 )
 
+REM # add the file to the hash-cache
+CALL "%HERE%\hash_add.bat" "%PNG_FILE%"
+
 REM # cap status line with the new file size
-CALL :status_newsize "%~1"
+CALL :status_newsize "%PNG_FILE%"
 
 GOTO:EOF
 
 REM ====================================================================================================================
-
+	
 :status_oldsize
 	REM # prepare the columns for output
-	SET "COLS=                                                                               "
-	SET "COL1_W=45"
-	SET "COL1=!COLS:~0,%COL1_W%!"
+	SET "PNG_COLS=                                                                               "
+	SET "PNG_COL1_W=45"
+	SET "PNG_COL1=!PNG_COLS:~0,%PNG_COL1_W%!"
 	REM # prepare the status line
-	SET "LINE=%~nx1%COL1%"
+	SET "PNG_LINE=%~nx1%PNG_COL1%"
 	REM # get the current file size
-	SET "SIZE_OLD=%~z1"
+	SET "PNG_SIZE_OLD=%~z1"
 	REM # right-align it
-	CALL :format_filesize_bytes LINE_OLD %SIZE_OLD%
+	CALL :format_filesize_bytes PNG_LINE_OLD %PNG_SIZE_OLD%
 	REM # output the status line (without new line)
-	<NUL (SET /P "$=- !LINE:~0,%COL1_W%! %LINE_OLD% ")
+	<NUL (SET /P "$=- !PNG_LINE:~0,%PNG_COL1_W%! %PNG_LINE_OLD% ")
 	GOTO:EOF
 
 :status_newsize
-	SET "SIZE_NEW=%~z1"
+	SET "PNG_SIZE_NEW=%~z1"
 	REM # right-align the number
-	CALL :format_filesize_bytes LINE_NEW %SIZE_NEW%
+	CALL :format_filesize_bytes PNG_LINE_NEW %PNG_SIZE_NEW%
 	REM # calculate percentage change
-	SET /A SAVED=100-100*SIZE_NEW/SIZE_OLD
-	SET "SAVED=   %SAVED%%%"
-	ECHO - %SAVED:~-3% = %LINE_NEW%
+	IF "%PNG_SIZE_NEW%" == "%PNG_SIZE_OLD%" (
+		SET /A PNG_SAVED=0
+	) ELSE (
+		SET /A PNG_SAVED=100-100*PNG_SIZE_NEW/PNG_SIZE_OLD
+	)
+	REM # align and print
+	SET "PNG_SAVED=   %PNG_SAVED%%%"
+	ECHO - %PNG_SAVED:~-3% = %PNG_LINE_NEW%
 	GOTO:EOF
 
 :format_filesize_bytes

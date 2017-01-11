@@ -1,0 +1,11 @@
+v1.1    ?
+-       Skip files that have already been crushed before
+        (a cache of file hashes is kept in `bin\hashes.txt`)
+-       WADPTR's sidedef packing is disabled to prevent glitches in maps
+-       Fixes for file size reduction reporting
+
+v1.0.1  17-DEC-16
+-       Fixed WADs being processed twice in a row
+
+v1.0    14-DEC-16
+-       Initial release

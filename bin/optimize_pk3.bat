@@ -94,10 +94,10 @@ IF %DO_PNG% EQU 0 SET OPTIMIZE_WAD=%OPTIMIZE_WAD% /NOPNG
 IF %DO_JPG% EQU 0 SET OPTIMIZE_WAD=%OPTIMIZE_WAD% /NOJPG
 
 REM # display file name and current file size
-CALL :status_oldsize "%~1"
+CALL :status_oldsize "%~f1"
 
 REM # absolute path of the PK3 file
-SET "FILE=%~dpnx1"
+SET "PK3_FILE=%~f1"
 REM # temporary folder used to extract the PK3/WAD
 SET "TEMP_DIR=%TEMP%\%~nx1"
 REM # temporary file used during repacking;
@@ -159,14 +159,14 @@ IF NOT EXIST "%TEMP_DIR%" (
 REM # use 7zip to unpack the PK3 file
 REM --------------------------------------------------------------------------------------------------------------------
 <NUL (SET /P "$=: unpacking...")
-%BIN_7ZA% x -aos -o"%TEMP_DIR%" -tzip -- "%FILE%" >NUL 2>&1
+%BIN_7ZA% x -aos -o"%TEMP_DIR%" -tzip -- "%PK3_FILE%" >NUL 2>&1
 IF ERRORLEVEL 1 (
 	REM # cap the status line
 	ECHO  err^^!!
 	ECHO ===============================================================================
 	REM # retry with output visible
 	ECHO:
-	%BIN_7ZA% x -aos -o"%TEMP_DIR%" -tzip -- "%FILE%"
+	%BIN_7ZA% x -aos -o"%TEMP_DIR%" -tzip -- "%PK3_FILE%"
 	ECHO:
 	REM # clean up the temporary directory
 	IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
@@ -187,17 +187,17 @@ REM # you can't use variables in the `FOR /R` parameter
 PUSHD "%TEMP_DIR%"
 REM # JPEG files:
 IF %DO_JPG% EQU 1 (
-	FOR /R "." %%Z IN (*.jpg;*.jpeg) DO CALL %OPTIMIZE_JPG% "%%~dpnxZ"
+	FOR /R "." %%Z IN (*.jpg;*.jpeg) DO CALL %OPTIMIZE_JPG% "%%~fZ"
 )
 REM # PNG files:
 IF %DO_PNG% EQU 1 (
-	FOR /R "." %%Z IN (*.png) DO CALL %OPTIMIZE_PNG% "%%~dpnxZ"
+	FOR /R "." %%Z IN (*.png) DO CALL %OPTIMIZE_PNG% "%%~fZ"
 )
 REM # WAD files:
 FOR /R "." %%Z IN (*.wad) DO (
-	CALL %OPTIMIZE_WAD% "%%~dpnxZ"
+	CALL %OPTIMIZE_WAD% "%%~fZ"
 )
-REM # files without an extension
+REM # files without an extension:
 FOR /R "." %%Z IN (*.) DO (
 	REM # READ the first 1021 bytes of the lump.
 	REM # a truly brilliant solution, thanks to:
@@ -205,14 +205,14 @@ FOR /R "." %%Z IN (*.) DO (
 	SET "HEADER=" & SET /P HEADER=< "%%~Z"
 	REM # a JPEG file?
 	IF %DO_JPG% EQU 1 (
-		IF "!HEADER:~0,2!" == "ÿØ"  CALL %OPTIMIZE_JPG% "%%~dpnxZ"
+		IF "!HEADER:~0,2!" == "ÿØ"  CALL %OPTIMIZE_JPG% "%%~fZ"
 	)
 	REM # a PNG file?
 	IF %DO_PNG% EQU 1 (
-		IF "!HEADER:~1,3!" == "PNG" CALL %OPTIMIZE_PNG% "%%~dpnxZ"
+		IF "!HEADER:~1,3!" == "PNG" CALL %OPTIMIZE_PNG% "%%~fZ"
 	)
 	REM # a WAD file?
-	IF "!HEADER:~1,3!" == "WAD" CALL %OPTIMIZE_WAD% "%%~dpnxZ"
+	IF "!HEADER:~1,3!" == "WAD" CALL %OPTIMIZE_WAD% "%%~fZ"
 )
 
 POPD
@@ -223,14 +223,15 @@ REM # switch to the temporary directory so that the PK3 files are
 REM # at the base of the ZIP file rather than in a sub-folder
 PUSHD "%TEMP_DIR%"
 REM # use 7Zip to do the ZIP compression as it has options to maximize compression
-%BIN_7ZA% a "%TEMP%\%~n1.zip" -bso0 -bsp1 -tzip -r -mx9 -mfb258 -mpass15 -- *
+REM %BIN_7ZA% a "%TEMP%\%~n1.zip" -bso0 -bsp1 -tzip -r -mx9 -mfb258 -mpass15 -- *
+%BIN_7ZA% a "%TEMP%\%~n1.zip" -bso0 -bsp1 -bse0 -tzip -r -mx0 -- *
 IF ERRORLEVEL 1 (
 	ECHO:
 	ECHO ERROR: Could not repack the PK3.
 	ECHO:
 	EXIT /B 1
 )
-COPY /Y "%TEMP%\%~n1.zip" "%FILE%"
+COPY /Y "%TEMP%\%~n1.zip" "%PK3_FILE%"  >NUL 2>&1
 IF ERRORLEVEL 1 (
 	ECHO:
 	ECHO ERROR: Could not replace the original PK3 with the new version.
@@ -245,12 +246,12 @@ REM # deflopt the PK3:
 REM --------------------------------------------------------------------------------------------------------------------
 REM # display the original file size before deflopt
 REM # (the new file size will be added to the end)
-<NUL (SET /P "$=- %LINE:~0,45% %LINE_OLD% ")
+<NUL (SET /P "$=- %PK3_LINE:~0,45% %PK3_LINE_OLD% ")
 REM # deflopt location
 SET "BIN_DEFLOPT=%HERE%\deflopt\DeflOpt.exe"
 REM # running deflopt can shave a few more bytes off of any DEFLATE-based content
 REM # if this failed, just continue, the original won't have been overwritten
-"%BIN_DEFLOPT%" /a "%FILE%"  >NUL 2>&1
+"%BIN_DEFLOPT%" /a "%PK3_FILE%"  >NUL 2>&1
 
 REM # clean-up:
 REM --------------------------------------------------------------------------------------------------------------------
@@ -277,7 +278,7 @@ IF EXIST "%TEMP_DIR%" (
 )
 
 REM # cap the status line with the new file size
-CALL :status_newsize "%FILE%"
+CALL :status_newsize "%PK3_FILE%"
 
 GOTO:EOF
 
@@ -285,27 +286,32 @@ REM ============================================================================
 
 :status_oldsize
 	REM # prepare the columns for output
-	SET "COLS=                                                                               "
-	SET "COL1_W=45"
-	SET "COL1=!COLS:~0,%COL1_W%!"
+	SET "PK3_COLS=                                                                               "
+	SET "PK3_COL1_W=45"
+	SET "PK3_COL1=!PK3_COLS:~0,%PK3_COL1_W%!"
 	REM # prepare the status line
-	SET "LINE=%~nx1%COL1%"
+	SET "PK3_LINE=%~nx1%PK3_COL1%"
 	REM # get the current file size
-	SET "SIZE_OLD=%~z1"
+	SET "PK3_SIZE_OLD=%~z1"
 	REM # right-align it
-	CALL :format_filesize_bytes LINE_OLD %SIZE_OLD%
+	CALL :format_filesize_bytes PK3_LINE_OLD %PK3_SIZE_OLD%
 	REM # output the status line (without new line)
-	<NUL (SET /P "$=+ !LINE:~0,%COL1_W%! %LINE_OLD% ")
+	<NUL (SET /P "$=+ !PK3_LINE:~0,%PK3_COL1_W%! %PK3_LINE_OLD% ")
 	GOTO:EOF
 
 :status_newsize
-	SET "SIZE_NEW=%~z1"
+	SET "PK3_SIZE_NEW=%~z1"
 	REM # right-align the number
-	CALL :format_filesize_bytes LINE_NEW %SIZE_NEW%
+	CALL :format_filesize_bytes PK3_LINE_NEW %PK3_SIZE_NEW%
 	REM # calculate percentage change
-	SET /A SAVED=100-100*SIZE_NEW/SIZE_OLD
-	SET "SAVED=   %SAVED%%%"
-	ECHO - %SAVED:~-3% = %LINE_NEW%
+	IF "%PK3_SIZE_NEW%" == "%PK3_SIZE_OLD%" (
+		SET /A PK3_SAVED=0
+	) ELSE (
+		SET /A PK3_SAVED=100-100*PK3_SIZE_NEW/PK3_SIZE_OLD
+	)
+	REM # align and print
+	SET "PK3_SAVED=   %PK3_SAVED%%%"
+	ECHO - %PK3_SAVED:~-3% = %PK3_LINE_NEW%
 	GOTO:EOF
 	
 :format_filesize_bytes

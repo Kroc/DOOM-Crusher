@@ -76,8 +76,8 @@ REM ============================================================================
 REM # we cannot get the updated size of the file without just-in-time variable expansion
 SETLOCAL ENABLEDELAYEDEXPANSION
 
-REM # absolute path of the WAD file
-SET "FILE=%~dpnx1"
+REM # absolute path of the given WAD file
+SET "WAD_FILE=%~f1"
 
 REM # location of the wadptr executable
 SET BIN_WADPTR="%HERE%\wadptr\wadptr.exe"
@@ -91,7 +91,17 @@ SET OPTIMIZE_JPG="%HERE%\optimize_jpg.bat"
 REM # status line:
 REM --------------------------------------------------------------------------------------------------------------------
 REM # display file name and current file size
-CALL :status_oldsize "%~1"
+CALL :status_oldsize "%WAD_FILE%"
+
+REM # done this file before?
+REM --------------------------------------------------------------------------------------------------------------------
+REM ' check the file in the hash-cache
+CALL "%HERE%\hash_check.bat" "%WAD_FILE%"
+REM # if the file is in the hash-cache, we can skip it
+IF %ERRORLEVEL% EQU 0 (
+	ECHO : skipped ^(cache^)
+	EXIT /B 0
+)
 
 REM # clean up any previous attempt
 REM --------------------------------------------------------------------------------------------------------------------
@@ -136,7 +146,7 @@ IF NOT EXIST "%TEMP_DIR%" (
 REM # copy the WAD to the temporary directory; we could save a lot of I/O if we moved it and then moved it back when
 REM # we were done, but if the script is stopped or crashes we don't want to misplace original files.
 SET "TEMP_FILE=%TEMP_DIR%\%~nx1"
-COPY /Y "%FILE%" "%TEMP_FILE%"  >NUL 2>&1
+COPY /Y "%WAD_FILE%" "%TEMP_FILE%"  >NUL 2>&1
 REM # did the copy fail?
 IF ERRORLEVEL 1 (
 	REM # cap the status line to say that the copy errored
@@ -150,7 +160,8 @@ IF ERRORLEVEL 1 (
 
 REM # use wadptr to optimize a WAD:
 REM ====================================================================================================================
-REM # change to the temporary directory, wadptr is prone to choking on absolute/relative paths
+REM # change to the temporary directory, wadptr is prone to choking on absolute/relative paths,
+REM # it's best to give it a single file name within the current directory
 PUSHD "%TEMP_DIR%"
 
 REM # check if WAD is an IWAD or PWAD; we can't use wadptr to optimize IWADs (it asks for confirmation and there isn't
@@ -162,8 +173,10 @@ SET "HEADER=" & SET /P HEADER=< "%TEMP_FILE%"
 
 REM # a WAD file will begin with "IWAD" or "PWAD" respectively
 IF "%HEADER:~0,4%" == "PWAD" (
-	REM # do the wadptr compression.
-	%BIN_WADPTR% -c "%~nx1"  >NUL 2>&1
+	REM # do the wadptr compression:
+	REM # -c	: compress
+	REM # -nopack	: skip sidedef packing as this can cause glitches in maps
+	%BIN_WADPTR% -c -nopack "%~nx1"  >NUL 2>&1
 	REM # if this errors, the WAD won't have been changed so we can continue
 	IF !ERRORLEVEL! NEQ 0 (
 		REM # cap the status line to say that wadptr errored,
@@ -181,7 +194,9 @@ REM # if no lumps within the wad are relevant, we skip printing some uneccessary
 SET "ANY=0"
 
 REM # list the WAD contents and get the name and length of each lump
-FOR /F "usebackq skip=3 tokens=1-3" %%A IN (`"%BIN_LUMPMOD% "%TEMP_FILE%" list -v"`) DO (
+REM # (use of quotes in a FOR command here is fraught with complications:
+REM #  http://stackoverflow.com/questions/22636308)
+FOR /F "skip=3 tokens=1-3" %%A IN ('^""%BIN_LUMPMOD%" "%TEMP_FILE%" list -v"^"') DO (
 	REM # lumps of length 0 are just markers and can be skipped
 	IF NOT "%%C" == "0" (
 		REM # ensure the lump name can be written to disk
@@ -201,7 +216,7 @@ FOR /F "usebackq skip=3 tokens=1-3" %%A IN (`"%BIN_LUMPMOD% "%TEMP_FILE%" list -
 
 		REM # the lump name cannot tell us the file type in the lump,
 		REM # we need to save out the lump and examine its contents
-		%BIN_LUMPMOD% "%TEMP_FILE%" extract %%B "!LUMP!" >NUL
+		%BIN_LUMPMOD% "%TEMP_FILE%" extract %%B "!LUMP!" >NUL 2>&1
 		REM # only continue if this succeeded
 		IF !ERRORLEVEL! EQU 0 (
 			REM # READ the first 1021 bytes of the lump.
@@ -231,12 +246,13 @@ FOR /F "usebackq skip=3 tokens=1-3" %%A IN (`"%BIN_LUMPMOD% "%TEMP_FILE%" list -
 			)
 			
 			REM # was the lump omptimized?
-			REM # (the orginal lump size is already in %%C)
+			REM # (the orginal lump size is already in `%%C`)
 			FOR %%F IN ("!LUMP!") DO SET "LUMP_SIZE=%%~zF"
 			REM # compare sizes
 			IF !LUMP_SIZE! LSS %%C (
 				REM # put the lump back into the WAD
-				%BIN_LUMPMOD% "%TEMP_FILE%" update %%B "!LUMP!" >NUL
+				%BIN_LUMPMOD% "%TEMP_FILE%" update %%B "!LUMP!" >NUL 2>&1
+				REM # TODO: handle error here?
 			)
 		)
 	)
@@ -246,20 +262,20 @@ REM clean-up:
 REM ====================================================================================================================
 REM # temporary WAD has been optimized, replace the original
 REM # (if this were to error just continue with the clean-up)
-COPY /Y "%TEMP_FILE%" "%FILE%"  >NUL 2>&1
+COPY /Y "%TEMP_FILE%" "%WAD_FILE%"  >NUL 2>&1
 
 REM --------------------------------------------------------------------------------------------------------------------
 IF %ANY% EQU 1 (
 	REM # get the new file size (we need this dummy for-loop to force re-reading the file size)
-	FOR %%F IN ("%FILE%") DO SET "SIZE_NEW=%%~zF"
+	FOR %%F IN ("%WAD_FILE%") DO SET "WAD_SIZE_NEW=%%~zF"
 	REM # right-align the number
-	CALL :format_filesize_bytes LINE_NEW !SIZE_NEW!
+	CALL :format_filesize_bytes WAD_LINE_NEW !WAD_SIZE_NEW!
 	REM # calculate percentage change
-	SET /A SAVED=100-100*SIZE_NEW/SIZE_OLD
-	SET "SAVED=   !SAVED!%%"
+	SET /A WAD_SAVED=100-100*WAD_SIZE_NEW/WAD_SIZE_OLD
+	SET "WAD_SAVED=   !WAD_SAVED!%%"
 	
 	ECHO -------------------------------------------------------------------------------
-	ECHO = %LINE:~0,45% %LINE_OLD% - !SAVED:~-3! = !LINE_NEW!
+	ECHO = %WAD_LINE:~0,45% %WAD_LINE_OLD% - !WAD_SAVED:~-3! = !WAD_LINE_NEW!
 	ECHO:
 )
 
@@ -268,6 +284,9 @@ POPD
 REM # remove the temporary directory (intentional duplicate)
 IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
 IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
+
+REM # add the file to the hash-cache
+CALL "%HERE%\hash_add.bat" "%WAD_FILE%"
 
 GOTO:EOF
 
@@ -283,27 +302,32 @@ GOTO:EOF
 
 :status_oldsize
 	REM # prepare the columns for output
-	SET "COLS=                                                                               "
-	SET "COL1_W=45"
-	SET "COL1=!COLS:~0,%COL1_W%!"
+	SET "WAD_COLS=                                                                               "
+	SET "WAD_COL1_W=45"
+	SET "WAD_COL1=!WAD_COLS:~0,%WAD_COL1_W%!"
 	REM # prepare the status line
-	SET "LINE=%~nx1%COL1%"
+	SET "WAD_LINE=%~nx1%WAD_COL1%"
 	REM # get the current file size
-	SET "SIZE_OLD=%~z1"
+	SET "WAD_SIZE_OLD=%~z1"
 	REM # right-align it
-	CALL :format_filesize_bytes LINE_OLD %SIZE_OLD%
+	CALL :format_filesize_bytes WAD_LINE_OLD %WAD_SIZE_OLD%
 	REM # output the status line (without new line)
-	<NUL (SET /P "$=+ !LINE:~0,%COL1_W%! %LINE_OLD% ")
+	<NUL (SET /P "$=+ !WAD_LINE:~0,%WAD_COL1_W%! %WAD_LINE_OLD% ")
 	GOTO:EOF
 
 :status_newsize
-	SET "SIZE_NEW=%~z1"
+	SET "WAD_SIZE_NEW=%~z1"
 	REM # right-align the number
-	CALL :format_filesize_bytes LINE_NEW %SIZE_NEW%
+	CALL :format_filesize_bytes WAD_LINE_NEW %WAD_SIZE_NEW%
 	REM # calculate percentage change
-	SET /A SAVED=100-100*SIZE_NEW/SIZE_OLD
-	SET "SAVED=   %SAVED%%%"
-	ECHO - %SAVED:~-3% = %LINE_NEW%
+	IF "%WAD_SIZE_NEW%" == "%WAD_SIZE_OLD%" (
+		SET /A WAD_SAVED=0
+	) ELSE (
+		SET /A WAD_SAVED=100-100*WAD_SIZE_NEW/WAD_SIZE_OLD
+	)
+	REM # align and print
+	SET "WAD_SAVED=   %WAD_SAVED%%%"
+	ECHO - %WAD_SAVED:~-3% = %WAD_LINE_NEW%
 	GOTO:EOF
 
 :format_filesize_bytes

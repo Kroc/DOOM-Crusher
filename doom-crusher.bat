@@ -1,6 +1,6 @@
 @ECHO OFF
 
-REM # doom-crusher.bat : v1.0.1
+REM # doom-crusher.bat : v1.1
 REM ====================================================================================================================
 REM # optimize DOOM-related files: PK3 / WAD / PNG / JPG
 
@@ -33,7 +33,7 @@ IF /I "%~1" == "/NOJPG" (
 REM # any file/folder parameters?
 REM --------------------------------------------------------------------------------------------------------------------
 IF "%~1" == "" (
-	ECHO doom-crusher.bat: v1 - Kroc Camen
+	ECHO doom-crusher.bat: v1.1 - Kroc Camen
 	ECHO:
 	ECHO Usage:
 	ECHO:
@@ -62,8 +62,8 @@ IF "%~1" == "" (
 
 REM ====================================================================================================================
 ECHO:
-ECHO doom-crusher.bat : v1
-ECHO feedback: github.com/Kroc/DOOM-Crusher or kroc+doom@camendesign.com
+ECHO # doom-crusher : v1.1
+ECHO #     feedback : ^<github.com/Kroc/DOOM-Crusher^> or ^<kroc+doom@camendesign.com^>
 ECHO ###############################################################################
 
 REM # our component scripts
@@ -94,14 +94,14 @@ IF /I "%ATTR:~0,1%" == "d" (
 	FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.pk3;*.) DO (
 		REM # optimize known file types:
 		IF %DO_JPG% EQU 1 (
-			IF /I "%%~xZ" == ".JPG"  CALL %OPTIMIZE_JPG% "%%~dpnxZ"
-			IF /I "%%~xZ" == ".JPEG" CALL %OPTIMIZE_JPG% "%%~dpnxZ"
+			IF /I "%%~xZ" == ".JPG"  CALL %OPTIMIZE_JPG% "%%~fZ"
+			IF /I "%%~xZ" == ".JPEG" CALL %OPTIMIZE_JPG% "%%~fZ"
 		)
 		IF %DO_PNG% EQU 1 (
-			IF /I "%%~xZ" == ".PNG"  CALL %OPTIMIZE_PNG% "%%~dpnxZ"
+			IF /I "%%~xZ" == ".PNG"  CALL %OPTIMIZE_PNG% "%%~fZ"
 		)
-		IF /I "%%~xZ" == ".WAD"  CALL %OPTIMIZE_WAD% "%%~dpnxZ"
-		IF /I "%%~xZ" == ".PK3"  CALL %OPTIMIZE_PK3% "%%~dpnxZ"
+		IF /I "%%~xZ" == ".WAD"  CALL %OPTIMIZE_WAD% "%%~fZ"
+		IF /I "%%~xZ" == ".PK3"  CALL %OPTIMIZE_PK3% "%%~fZ"
 		REM # files without an extension
 		IF "%%~xZ" == "" (
 			REM # READ the first 1021 bytes of the lump.
@@ -110,14 +110,14 @@ IF /I "%ATTR:~0,1%" == "d" (
 			SET "HEADER=" & SET /P HEADER=< "%%~Z"
 			REM # a JPEG file?
 			IF %DO_JPG% EQU 1 (
-				IF "!HEADER:~0,2!" == "ÿØ"  CALL %OPTIMIZE_JPG% "%%~dpnxZ"
+				IF "!HEADER:~0,2!" == "ÿØ"  CALL %OPTIMIZE_JPG% "%%~fZ"
 			)
 			REM # a PNG file?
 			IF %DO_PNG% EQU 1 (
-				IF "!HEADER:~1,3!" == "PNG" CALL %OPTIMIZE_PNG% "%%~dpnxZ"
+				IF "!HEADER:~1,3!" == "PNG" CALL %OPTIMIZE_PNG% "%%~fZ"
 			)
 			REM # a WAD file?
-			IF "!HEADER:~1,3!" == "WAD" CALL %OPTIMIZE_WAD% "%%~dpnxZ"
+			IF "!HEADER:~1,3!" == "WAD" CALL %OPTIMIZE_WAD% "%%~fZ"
 		)
 	)
 	REM # put that thing back where it came from, or so help me
@@ -126,17 +126,17 @@ IF /I "%ATTR:~0,1%" == "d" (
 	GOTO :next_param
 )
 REM # PK3 file:
-IF /I "%~x1" == ".PK3" CALL %OPTIMIZE_PK3% "%~dpnx1"
+IF /I "%~x1" == ".PK3" CALL %OPTIMIZE_PK3% "%~f1"
 REM # WAD file:
-IF /I "%~x1" == ".WAD" CALL %OPTIMIZE_WAD% "%~dpnx1"
+IF /I "%~x1" == ".WAD" CALL %OPTIMIZE_WAD% "%~f1"
 REM # PNG file:
 IF /I "%~x1" == ".PNG" (
-	IF %DO_PNG% EQU 1 CALL %OPTIMIZE_PNG% "%~dpnx1"
+	IF %DO_PNG% EQU 1 CALL %OPTIMIZE_PNG% "%~f1"
 )
 REM # JPG file:
 IF %DO_JPG% EQU 1 (
-	IF /I "%~x1" == ".JPG"  CALL %OPTIMIZE_JPG% "%~dpnx1"
-	IF /I "%~x1" == ".JPEG" CALL %OPTIMIZE_JPG% "%~dpnx1"
+	IF /I "%~x1" == ".JPG"  CALL %OPTIMIZE_JPG% "%~f1"
+	IF /I "%~x1" == ".JPEG" CALL %OPTIMIZE_JPG% "%~f1"
 )
 
 REM # no file extension, or not a known file extension? -- examine contents
@@ -145,17 +145,17 @@ IF "%~x1" == "" (
 	REM # READ the first 1021 bytes of the lump.
 	REM # a truly brilliant solution, thanks to:
 	REM # http://stackoverflow.com/a/7827243
-	SET "HEADER=" & SET /P HEADER=< "%~dpnx1"
+	SET "HEADER=" & SET /P HEADER=< "%~f1"
 	REM # a JPEG file?
 	IF %DO_JPG% EQU 1 (
-		IF "!HEADER:~0,2!" == "ÿØ"  CALL %OPTIMIZE_JPG% "%~dpnx1"
+		IF "!HEADER:~0,2!" == "ÿØ"  CALL %OPTIMIZE_JPG% "%~f1"
 	)
 	REM # a PNG file?
 	IF %DO_PNG% EQU 1 (
-		IF "!HEADER:~1,3!" == "PNG" CALL %OPTIMIZE_PNG% "%~dpnx1"
+		IF "!HEADER:~1,3!" == "PNG" CALL %OPTIMIZE_PNG% "%~f1"
 	)
 	REM # a WAD file?
-	IF "!HEADER:~1,3!" == "WAD" CALL %OPTIMIZE_WAD% "%~dpnx1"
+	IF "!HEADER:~1,3!" == "WAD" CALL %OPTIMIZE_WAD% "%~f1"
 )
 
 
@@ -169,6 +169,6 @@ IF NOT "%~1" == "" (
 )
 
 ECHO ###############################################################################
-ECHO complete
+ECHO # complete
 ECHO:
 PAUSE
