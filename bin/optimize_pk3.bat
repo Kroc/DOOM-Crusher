@@ -14,6 +14,7 @@ IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
 REM # default options
 SET "DO_PNG=1"
 SET "DO_JPG=1"
+SET "USE_CACHE=1"
 
 :options
 REM --------------------------------------------------------------------------------------------------------------------
@@ -21,6 +22,8 @@ REM # use "/NOPNG" to disable PNG processing (the slowest part)
 IF /I "%~1" == "/NOPNG" (
 	REM # turn off PNG processing
 	SET "DO_PNG=0"
+	REM # if PNGs are being skipped, DON'T add the crushed PK3 to the cache!
+	SET "USE_CACHE=0"
 	REM # check for more options
 	SHIFT & GOTO :options
 )
@@ -28,6 +31,8 @@ REM # use "/NOJPG" to disable JPEG processing
 IF /I "%~1" == "/NOJPG" (
 	REM # turn off JPEG processing
 	SET "DO_JPG=0"
+	REM # if JPGs are being skipped, DON'T add the crushed PK3 to the cache!
+	SET "USE_CACHE=0"
 	REM # check for more options
 	SHIFT & GOTO :options
 )
@@ -74,6 +79,14 @@ REM ============================================================================
 REM # we cannot get the updated size of the file without just-in-time variable expansion
 SETLOCAL ENABLEDELAYEDEXPANSION
 
+REM # absolute path of the PK3 file
+SET "PK3_FILE=%~f1"
+REM # temporary folder used to extract the PK3/WAD
+SET "TEMP_DIR=%TEMP%\%~nx1"
+REM # temporary file used during repacking;
+REM # this must use a ZIP extension or 7ZIP borks
+SET "TEMP_FILE=%TEMP_DIR%\%~n1.zip"
+
 REM # detect 32-bit or 64-bit Windows
 SET "WINBIT=32"
 IF /I "%PROCESSOR_ARCHITECTURE%" == "EM64T" SET "WINBIT=64"	& REM # Itanium
@@ -96,13 +109,17 @@ IF %DO_JPG% EQU 0 SET OPTIMIZE_WAD=%OPTIMIZE_WAD% /NOJPG
 REM # display file name and current file size
 CALL :status_oldsize "%~f1"
 
-REM # absolute path of the PK3 file
-SET "PK3_FILE=%~f1"
-REM # temporary folder used to extract the PK3/WAD
-SET "TEMP_DIR=%TEMP%\%~nx1"
-REM # temporary file used during repacking;
-REM # this must use a ZIP extension or 7ZIP borks
-SET "TEMP_FILE=%TEMP_DIR%\%~n1.zip"
+REM # done this file before?
+REM --------------------------------------------------------------------------------------------------------------------
+IF %USE_CACHE% EQU 1 (
+	REM # check the file in the hash-cache
+	CALL "%HERE%\hash_check.bat" "%PK3_FILE%"
+	REM # if the file is in the hash-cache, we can skip it
+	IF !ERRORLEVEL! EQU 0 (
+		ECHO : skipped ^(cache^)
+		EXIT /B 0
+	)
+)
 
 REM # clean up any previous attempt
 REM --------------------------------------------------------------------------------------------------------------------
@@ -279,6 +296,9 @@ IF EXIST "%TEMP_DIR%" (
 
 REM # cap the status line with the new file size
 CALL :status_newsize "%PK3_FILE%"
+
+REM # add the file to the hash-cache
+IF %USE_CACHE% EQU 1 CALL "%HERE%\hash_add.bat" "%WAD_FILE%"
 
 GOTO:EOF
 

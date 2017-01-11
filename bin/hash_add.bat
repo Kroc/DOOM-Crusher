@@ -60,11 +60,13 @@ REM # cacnonical location of the hash-cache
 SET HASHFILE="%HERE%\hashes.txt"
 
 REM # check if the same file name is found in the hashes:
-REM # (use of quotes in a FOR command here is fraught with complications:
-REM #  http://stackoverflow.com/questions/22636308)
-FOR /F "eol=* tokens=* delims=" %%A IN ('^"%BIN_HASH% -m %HASHFILE% -b "%~f1"^"') DO (
-	REM # if the file is already in the hash-cache, skip
-	IF /I "%%A" == "%~nx1" EXIT /B 0
+IF EXIST %HASHFILE% (
+	REM # (use of quotes in a FOR command here is fraught with complications:
+	REM #  http://stackoverflow.com/questions/22636308)
+	FOR /F "eol=* tokens=* delims=" %%A IN ('^"%BIN_HASH% -m %HASHFILE% -b "%~f1"^"') DO (
+		REM # if the file is already in the hash-cache, skip
+		IF /I "%%A" == "%~nx1" EXIT /B 0
+	)
 )
 
 REM # hash the file:

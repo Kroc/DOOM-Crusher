@@ -18,6 +18,7 @@ IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
 REM # default options
 SET "DO_PNG=1"
 SET "DO_JPG=1"
+SET "USE_CACHE=1"
 
 :options
 REM --------------------------------------------------------------------------------------------------------------------
@@ -25,6 +26,8 @@ REM # use "/NOPNG" to disable PNG processing (the slowest part)
 IF /I "%~1" == "/NOPNG" (
 	REM # turn off PNG processing
 	SET "DO_PNG=0"
+	REM # if PNGs are being skipped, DON'T add the crushed WAD to the cache!
+	SET "USE_CACHE=0"
 	REM # check for more options
 	SHIFT & GOTO :options
 )
@@ -32,6 +35,8 @@ REM # use "/NOJPG" to disable JPEG processing
 IF /I "%~1" == "/NOJPG" (
 	REM # turn off JPEG processing
 	SET "DO_JPG=0"
+	REM # if JPGs are being skipped, DON'T add the crushed WAD to the cache!
+	SET "USE_CACHE=0"
 	REM # check for more options
 	SHIFT & GOTO :options
 )
@@ -95,12 +100,14 @@ CALL :status_oldsize "%WAD_FILE%"
 
 REM # done this file before?
 REM --------------------------------------------------------------------------------------------------------------------
-REM ' check the file in the hash-cache
-CALL "%HERE%\hash_check.bat" "%WAD_FILE%"
-REM # if the file is in the hash-cache, we can skip it
-IF %ERRORLEVEL% EQU 0 (
-	ECHO : skipped ^(cache^)
-	EXIT /B 0
+IF %USE_CACHE% EQU 1 (
+	REM # check the file in the hash-cache
+	CALL "%HERE%\hash_check.bat" "%WAD_FILE%"
+	REM # if the file is in the hash-cache, we can skip it
+	IF !ERRORLEVEL! EQU 0 (
+		ECHO : skipped ^(cache^)
+		EXIT /B 0
+	)
 )
 
 REM # clean up any previous attempt
@@ -286,7 +293,7 @@ IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
 IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
 
 REM # add the file to the hash-cache
-CALL "%HERE%\hash_add.bat" "%WAD_FILE%"
+IF %USE_CACHE% EQU 1 CALL "%HERE%\hash_add.bat" "%WAD_FILE%"
 
 GOTO:EOF
 

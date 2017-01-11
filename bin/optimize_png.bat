@@ -130,7 +130,8 @@ IF EXIST "%BIN_PNGOUT%" (
 	REM # execute pngout
 	%EXEC_PNGOUT% >NUL 2>&1
 	REM # if this fails:
-	IF !ERRORLEVEL! NEQ 0 (
+	REM # NOTE: pngout returns 2 for "unable to compress further", technically not an error!
+	IF !ERRORLEVEL! EQU 1 (
 		REM # cap the status line
 		ECHO ^^!! error ^<pngout^>
 		REM # reprint the status line for the next iteration
