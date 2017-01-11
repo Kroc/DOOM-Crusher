@@ -14,6 +14,7 @@ IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
 REM # default options
 SET "DO_PNG=1"
 SET "DO_JPG=1"
+SET "DO_WAD=1"
 SET "USE_CACHE=1"
 
 :options
@@ -32,6 +33,15 @@ IF /I "%~1" == "/NOJPG" (
 	REM # turn off JPEG processing
 	SET "DO_JPG=0"
 	REM # if JPGs are being skipped, DON'T add the crushed PK3 to the cache!
+	SET "USE_CACHE=0"
+	REM # check for more options
+	SHIFT & GOTO :options
+)
+REM # use "/NOWAD" to disable WAD processing
+IF /I "%~1" == "/NOWAD" (
+	REM # turn off WAD processing
+	SET "DO_WAD=0"
+	REM # if WADs are being skipped, DON'T add the crushed PK3 to the cache!
 	SET "USE_CACHE=0"
 	REM # check for more options
 	SHIFT & GOTO :options
@@ -211,8 +221,8 @@ IF %DO_PNG% EQU 1 (
 	FOR /R "." %%Z IN (*.png) DO CALL %OPTIMIZE_PNG% "%%~fZ"
 )
 REM # WAD files:
-FOR /R "." %%Z IN (*.wad) DO (
-	CALL %OPTIMIZE_WAD% "%%~fZ"
+IF %DO_WAD% EQU 1 (
+	FOR /R "." %%Z IN (*.wad) DO CALL %OPTIMIZE_WAD% "%%~fZ"
 )
 REM # files without an extension:
 FOR /R "." %%Z IN (*.) DO (
@@ -229,7 +239,9 @@ FOR /R "." %%Z IN (*.) DO (
 		IF "!HEADER:~1,3!" == "PNG" CALL %OPTIMIZE_PNG% "%%~fZ"
 	)
 	REM # a WAD file?
-	IF "!HEADER:~1,3!" == "WAD" CALL %OPTIMIZE_WAD% "%%~fZ"
+	IF %DO_WAD% EQU 1 (
+		IF "!HEADER:~1,3!" == "WAD" CALL %OPTIMIZE_WAD% "%%~fZ"
+	)
 )
 
 POPD

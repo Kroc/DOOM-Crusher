@@ -203,7 +203,7 @@ SET "ANY=0"
 REM # list the WAD contents and get the name and length of each lump
 REM # (use of quotes in a FOR command here is fraught with complications:
 REM #  http://stackoverflow.com/questions/22636308)
-FOR /F "skip=3 tokens=1-3" %%A IN ('^""%BIN_LUMPMOD%" "%TEMP_FILE%" list -v"^"') DO (
+FOR /F "skip=3 tokens=1-3" %%A IN ('^""%BIN_LUMPMOD%" "%TEMP_FILE%" list -v "^"') DO (
 	REM # lumps of length 0 are just markers and can be skipped
 	IF NOT "%%C" == "0" (
 		REM # ensure the lump name can be written to disk

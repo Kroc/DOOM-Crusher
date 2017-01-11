@@ -12,6 +12,8 @@ IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
 REM # default options
 SET "DO_PNG=1"
 SET "DO_JPG=1"
+SET "DO_WAD=1"
+SET "DO_PK3=1"
 
 :options
 REM --------------------------------------------------------------------------------------------------------------------
@@ -29,6 +31,20 @@ IF /I "%~1" == "/NOJPG" (
 	REM # check for more options
 	SHIFT & GOTO :options
 )
+REM # use "/NOWAD" to disable WAD processing
+IF /I "%~1" == "/NOWAD" (
+	REM # turn off WAD processing
+	SET "DO_WAD=0"
+	REM # check for more options
+	SHIFT & GOTO :options
+)
+REM # use "/NOPK3" to disable PK3 processing
+IF /I "%~1" == "/NOPK3" (
+	REM # turn off PK3 processing
+	SET "DO_PK3=0"
+	REM # check for more options
+	SHIFT & GOTO :options
+)
 
 REM # any file/folder parameters?
 REM --------------------------------------------------------------------------------------------------------------------
@@ -40,22 +56,14 @@ IF "%~1" == "" (
 	ECHO     Drag-and-drop file^(s^) and/or folder^(s^) onto "doom-crusher.bat",
 	ECHO     or use from a command-line / batch-file:
 	ECHO:
-	ECHO         doom-crusher.bat [/NOPNG] [/NOJPG] folder-or-file [...]
+	ECHO         doom-crusher.bat [options] folder-or-file [...]
 	ECHO:
+	ECHO	 "options" can be any of:
+	ECHO:	 
 	ECHO     /NOPNG : Skip processing PNG files
 	ECHO     /NOJPG : Skip processing JPG files
-	ECHO:
-	ECHO Methods:
-	ECHO: 
-	ECHO     JPEG files are optimized, without loss of quality, by "jpegtran".
-	ECHO     PNG files are ran through several optimizers: "optipng", "pngout",
-	ECHO     "pngcrush" and "deflopt".
-	ECHO:
-	ECHO     WAD files are first optimized by "wadptr" and then the contents
-	ECHO     are optimized as above.
-	ECHO:
-	ECHO     PK3 files are unpacked and all contents are optimized as above,
-	ECHO     then repacked into PK3 using 7Zip.
+	ECHO	 /NOWAD	: Skip processing WAD files
+	ECHO	 /NOPK3	: Skip processing PK3 files
 	ECHO:
 	PAUSE & EXIT /B 0
 )
@@ -81,6 +89,9 @@ IF %DO_JPG% EQU 0 (
 	SET OPTIMIZE_PK3=%OPTIMIZE_PK3% /NOJPG
 	SET OPTIMIZE_WAD=%OPTIMIZE_WAD% /NOJPG
 )
+IF %DO_WAD% EQU 0 (
+	SET OPTIMIZE_PK3=%OPTIMIZE_PK3% /NOWAD
+)
 
 REM # process parameter list
 REM ====================================================================================================================
@@ -100,8 +111,12 @@ IF /I "%ATTR:~0,1%" == "d" (
 		IF %DO_PNG% EQU 1 (
 			IF /I "%%~xZ" == ".PNG"  CALL %OPTIMIZE_PNG% "%%~fZ"
 		)
-		IF /I "%%~xZ" == ".WAD"  CALL %OPTIMIZE_WAD% "%%~fZ"
-		IF /I "%%~xZ" == ".PK3"  CALL %OPTIMIZE_PK3% "%%~fZ"
+		IF %DO_WAD% EQU 1 (
+			IF /I "%%~xZ" == ".WAD"  CALL %OPTIMIZE_WAD% "%%~fZ"
+		)
+		IF %DO_PK3% EQU 1 (
+			IF /I "%%~xZ" == ".PK3"  CALL %OPTIMIZE_PK3% "%%~fZ"
+		)
 		REM # files without an extension
 		IF "%%~xZ" == "" (
 			REM # READ the first 1021 bytes of the lump.
@@ -117,7 +132,9 @@ IF /I "%ATTR:~0,1%" == "d" (
 				IF "!HEADER:~1,3!" == "PNG" CALL %OPTIMIZE_PNG% "%%~fZ"
 			)
 			REM # a WAD file?
-			IF "!HEADER:~1,3!" == "WAD" CALL %OPTIMIZE_WAD% "%%~fZ"
+			IF %DO_WAD% EQU 1 (
+				IF "!HEADER:~1,3!" == "WAD" CALL %OPTIMIZE_WAD% "%%~fZ"
+			)
 		)
 	)
 	REM # put that thing back where it came from, or so help me
@@ -126,9 +143,13 @@ IF /I "%ATTR:~0,1%" == "d" (
 	GOTO :next_param
 )
 REM # PK3 file:
-IF /I "%~x1" == ".PK3" CALL %OPTIMIZE_PK3% "%~f1"
+IF %DO_PK3% EQU 1 (
+	IF /I "%~x1" == ".PK3" CALL %OPTIMIZE_PK3% "%~f1"
+)
 REM # WAD file:
-IF /I "%~x1" == ".WAD" CALL %OPTIMIZE_WAD% "%~f1"
+IF %DO_WAD% EQU 1 (
+	IF /I "%~x1" == ".WAD" CALL %OPTIMIZE_WAD% "%~f1"
+)
 REM # PNG file:
 IF /I "%~x1" == ".PNG" (
 	IF %DO_PNG% EQU 1 CALL %OPTIMIZE_PNG% "%~f1"
@@ -155,7 +176,9 @@ IF "%~x1" == "" (
 		IF "!HEADER:~1,3!" == "PNG" CALL %OPTIMIZE_PNG% "%~f1"
 	)
 	REM # a WAD file?
-	IF "!HEADER:~1,3!" == "WAD" CALL %OPTIMIZE_WAD% "%~f1"
+	IF %DO_WAD% EQU 1 (
+		IF "!HEADER:~1,3!" == "WAD" CALL %OPTIMIZE_WAD% "%~f1"
+	)
 )
 
 
