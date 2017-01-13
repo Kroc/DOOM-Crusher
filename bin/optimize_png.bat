@@ -55,6 +55,8 @@ SETLOCAL ENABLEDELAYEDEXPANSION
 
 REM # absolute path of the PNG file
 SET "PNG_FILE=%~f1"
+REM # after optimisation, the PNG file will be added to the cache so it can be skipped in the future
+SET "USE_CACHE=1"
 
 REM --------------------------------------------------------------------------------------------------------------------
 
@@ -136,6 +138,8 @@ IF EXIST "%BIN_PNGOUT%" (
 		ECHO ^^!! error ^<pngout^>
 		REM # reprint the status line for the next iteration
 		CALL :status_oldsize "%PNG_FILE%"
+		REM # if any of the PNG tools fail, do not add the file to the cache
+		SET "USE_CACHE=0"
 	)
 )
 
@@ -150,6 +154,8 @@ IF EXIST "%BIN_PNGCRUSH%" (
 		ECHO ^^!! error ^<pngcrush^>
 		REM # reprint the status line for the next iteration
 		CALL :status_oldsize "%PNG_FILE%"
+		REM # if any of the PNG tools fail, do not add the file to the cache
+		SET "USE_CACHE=0"
 	)
 )
 
@@ -167,12 +173,12 @@ IF EXIST "%BIN_DEFLOPT%" (
 )
 
 REM # add the file to the hash-cache
-CALL "%HERE%\hash_add.bat" "%PNG_FILE%"
+IF %USE_CACHE% EQU 1 CALL "%HERE%\hash_add.bat" "%PNG_FILE%"
 
 REM # cap status line with the new file size
 CALL :status_newsize "%PNG_FILE%"
 
-GOTO:EOF
+EXIT /B 0
 
 REM ====================================================================================================================
 	

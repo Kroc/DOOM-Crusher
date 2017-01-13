@@ -15,13 +15,13 @@ REM # (do this before using `SHIFT`)
 SET "HERE=%~dp0"
 IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
 
+:options
+REM --------------------------------------------------------------------------------------------------------------------
 REM # default options
 SET "DO_PNG=1"
 SET "DO_JPG=1"
 SET "USE_CACHE=1"
 
-:options
-REM --------------------------------------------------------------------------------------------------------------------
 REM # use "/NOPNG" to disable PNG processing (the slowest part)
 IF /I "%~1" == "/NOPNG" (
 	REM # turn off PNG processing
@@ -48,13 +48,18 @@ IF "%~1" == "" (
 	ECHO:
 	ECHO Usage:
 	ECHO:
-	ECHO     optimize_wad.bat ^<filepath^>
+	ECHO     optimize_wad.bat [options] ^<filepath^>
 	ECHO:
 	ECHO Notes:
 	ECHO:
 	ECHO     Optimizes a DOOM WAD file ^(which may contain embedded JPG and PNG files^).
 	ECHO:
-	GOTO:EOF
+	ECHO     "options" can be any of:
+	ECHO:	 
+	ECHO     /NOPNG  : Skip processing PNG files
+	ECHO     /NOJPG  : Skip processing JPG files
+	ECHO:
+	EXIT /B 0
 )
 
 REM # file missing?

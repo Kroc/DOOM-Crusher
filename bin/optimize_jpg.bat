@@ -50,7 +50,7 @@ REM # path of this script
 SET "HERE=%~dp0"
 IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
 
-REM # absolute path of the PNG file
+REM # absolute path of the JPG file
 SET "JPG_FILE=%~f1"
 
 REM # jpegtran:
@@ -82,7 +82,7 @@ IF ERRORLEVEL 1 (
 	REM # cap status line with the new file size
 	CALL :status_newsize "%JPG_FILE%"
 )
-GOTO:EOF
+EXIT /B 0
 
 REM ====================================================================================================================
 

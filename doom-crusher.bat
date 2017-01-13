@@ -9,14 +9,15 @@ REM # (do this before using `SHIFT`)
 SET "HERE=%~dp0"
 IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
 
+:options
+REM --------------------------------------------------------------------------------------------------------------------
 REM # default options
 SET "DO_PNG=1"
 SET "DO_JPG=1"
 SET "DO_WAD=1"
 SET "DO_PK3=1"
+SET "ZSTORE=0"
 
-:options
-REM --------------------------------------------------------------------------------------------------------------------
 REM # use "/NOPNG" to disable PNG processing (the slowest part)
 IF /I "%~1" == "/NOPNG" (
 	REM # turn off PNG processing
@@ -45,6 +46,13 @@ IF /I "%~1" == "/NOPK3" (
 	REM # check for more options
 	SHIFT & GOTO :options
 )
+REM # use "/ZSTORE" to disable compression of the PK3 file
+IF /I "%~1" == "/ZSTORE" (
+	REM # enable the relevant flag
+	SET "ZSTORE=1"
+	REM # check for more options
+	SHIFT & GOTO :options
+)
 
 REM # any file/folder parameters?
 REM --------------------------------------------------------------------------------------------------------------------
@@ -58,12 +66,21 @@ IF "%~1" == "" (
 	ECHO:
 	ECHO         doom-crusher.bat [options] folder-or-file [...]
 	ECHO:
-	ECHO	 "options" can be any of:
+	ECHO     "options" can be any of:
 	ECHO:	 
-	ECHO     /NOPNG : Skip processing PNG files
-	ECHO     /NOJPG : Skip processing JPG files
-	ECHO	 /NOWAD	: Skip processing WAD files
-	ECHO	 /NOPK3	: Skip processing PK3 files
+	ECHO     /NOPNG  : Skip processing PNG files
+	ECHO     /NOJPG  : Skip processing JPG files
+	ECHO     /NOWAD  : Skip processing WAD files
+	ECHO     /NOPK3  : Skip processing PK3 files
+	ECHO:
+	ECHO     /ZSTORE : Use no compression when re-packing PK3s.
+	ECHO               Whilst the PK3 file will be larger than before,
+	ECHO               it will boot faster.
+	ECHO:
+	ECHO               If you are compressing a number of PK3s together,
+	ECHO               then using /ZSTORE on them might drastically improve
+	ECHO               the final size of .7Z and .RAR archives when using
+	ECHO               a very large dictionary size ^(256 MB or more^).
 	ECHO:
 	PAUSE & EXIT /B 0
 )
@@ -91,6 +108,9 @@ IF %DO_JPG% EQU 0 (
 )
 IF %DO_WAD% EQU 0 (
 	SET OPTIMIZE_PK3=%OPTIMIZE_PK3% /NOWAD
+)
+IF %ZSTORE% EQU 1 (
+	SET OPTIMIZE_PK3=%OPTIMIZE_PK3% /ZSTORE
 )
 
 REM # process parameter list

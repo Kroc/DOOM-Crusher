@@ -11,14 +11,15 @@ REM # (do this before using `SHIFT`)
 SET "HERE=%~dp0"
 IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
 
+:options
+REM --------------------------------------------------------------------------------------------------------------------
 REM # default options
 SET "DO_PNG=1"
 SET "DO_JPG=1"
 SET "DO_WAD=1"
+SET "ZSTORE=0"
 SET "USE_CACHE=1"
 
-:options
-REM --------------------------------------------------------------------------------------------------------------------
 REM # use "/NOPNG" to disable PNG processing (the slowest part)
 IF /I "%~1" == "/NOPNG" (
 	REM # turn off PNG processing
@@ -46,6 +47,13 @@ IF /I "%~1" == "/NOWAD" (
 	REM # check for more options
 	SHIFT & GOTO :options
 )
+REM # use "/ZSTORE" to disable compression of the PK3 file
+IF /I "%~1" == "/ZSTORE" (
+	REM # enable the relevant flag
+	SET "ZSTORE=1"
+	REM # check for more options
+	SHIFT & GOTO :options
+)
 
 REM # any parameter?
 REM --------------------------------------------------------------------------------------------------------------------
@@ -54,13 +62,27 @@ IF "%~1" == "" (
 	ECHO:
 	ECHO Usage:
 	ECHO:
-	ECHO     optimize_pk3.bat ^<filepath^>
+	ECHO     optimize_pk3.bat [options] ^<filepath^>
 	ECHO:
 	ECHO Notes:
 	ECHO:
 	ECHO     Optimizes a PK3 file without any reduction in quality.
 	ECHO     This includes PNG, JPG and WAD optimization.
 	ECHO:
+	ECHO     "options" can be any of:
+	ECHO:	 
+	ECHO     /NOPNG  : Skip processing PNG files
+	ECHO     /NOJPG  : Skip processing JPG files
+	ECHO     /NOWAD  : Skip processing WAD files
+	ECHO:
+	ECHO     /ZSTORE : Use no compression when re-packing PK3s.
+	ECHO               Whilst the PK3 file will be larger than before,
+	ECHO               it will boot faster.
+	ECHO:
+	ECHO               If you are compressing a number of PK3s together,
+	ECHO               then using /ZSTORE on them might drastically improve
+	ECHO               the final size of .7Z and .RAR archives when using
+	ECHO               a very large dictionary size ^(256 MB or more^).
 	GOTO:EOF
 )
 
@@ -251,9 +273,16 @@ REM ----------------------------------------------------------------------------
 REM # switch to the temporary directory so that the PK3 files are
 REM # at the base of the ZIP file rather than in a sub-folder
 PUSHD "%TEMP_DIR%"
-REM # use 7Zip to do the ZIP compression as it has options to maximize compression
-REM %BIN_7ZA% a "%TEMP%\%~n1.zip" -bso0 -bsp1 -tzip -r -mx9 -mfb258 -mpass15 -- *
-%BIN_7ZA% a "%TEMP%\%~n1.zip" -bso0 -bsp1 -bse0 -tzip -r -mx0 -- *
+
+REM # are we using compression or not?
+IF %ZSTORE% = 1 (
+	REM # use no compression -- this causes the PK3 to boot faster
+	REM # and will aid 7Zip and RAR compression when compressing many PK3s together
+	%BIN_7ZA% a "%TEMP%\%~n1.zip" -bso0 -bsp1 -bse0 -tzip -r -mx0 -- *
+) ELSE (
+	REM # use maximum compression
+	%BIN_7ZA% a "%TEMP%\%~n1.zip" -bso0 -bsp1 -tzip -r -mx9 -mfb258 -mpass15 -- *
+)
 IF ERRORLEVEL 1 (
 	ECHO:
 	ECHO ERROR: Could not repack the PK3.
