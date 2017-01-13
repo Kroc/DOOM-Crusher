@@ -1,7 +1,13 @@
-v1.1    ?
+v1.1    13-JAN-17
 -       Skip files that have already been crushed before
         (a cache of file hashes is kept in `bin\hashes.txt`)
 -       WADPTR's sidedef packing is disabled to prevent glitches in maps
+-       Added `/NOPK3` and `/NOWAD` options to ignore these types
+-       Added `/ZSTORE` option to repack the PK3s *without* compression:
+        Whilst the PK3 file will be larger than before, it will boot faster.
+	If you are compressing a number of PK3s together, then using /ZSTORE
+        on them might drastically improve the final size of .7Z and .RAR
+        archives when using a very large dictionary size (256 MB or more)
 -       Fixes for file size reduction reporting
 
 v1.0.1  17-DEC-16

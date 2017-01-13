@@ -123,6 +123,8 @@ IF EXIST "%BIN_OPTIPNG%" (
 		ECHO ^^!! error ^<optipng^>
 		REM # reprint the status line for the next iteration
 		CALL :status_oldsize "%PNG_FILE%"
+		REM # if any of the PNG tools fail, do not add the file to the cache
+		SET "USE_CACHE=0"
 	)
 )
 
