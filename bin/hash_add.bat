@@ -28,6 +28,11 @@ IF "%~1" == "" (
 	GOTO:EOF
 )
 
+REM # cache directory
+SET "CACHEDIR=%HERE%\cache"
+REM # if it doesn't exist create it
+IF NOT EXIST "%CACHEDIR%" MKDIR "%CACHEDIR%"  >NUL 2>&1
+
 REM # detect 32-bit or 64-bit Windows
 SET "WINBIT=32"
 IF /I "%PROCESSOR_ARCHITECTURE%" == "EM64T" SET "WINBIT=64"	& REM # Itanium
@@ -41,11 +46,11 @@ IF "%WINBIT%" == "32" SET BIN_HASH="%HERE%\md5deep\sha256deep.exe"
 REM # has a suffix been specified?
 IF "%~2" == "" (
 	REM # cacnonical location of the hash-cache
-	SET HASHFILE="%HERE%\hashes.txt"
+	SET HASHFILE="%CACHEDIR%\hashes.txt"
 	SET "FILE=%~f1"
 	SET "NAME=%~nx1"
 ) ELSE (
-	SET HASHFILE="%HERE%\hashes_%~1.txt"
+	SET HASHFILE="%CACHEDIR%\hashes_%~1.txt"
 	SET "FILE=%~f2"
 	SET "NAME=%~nx2"
 )

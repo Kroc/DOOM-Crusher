@@ -29,6 +29,15 @@ IF "%~1" == "" (
 	GOTO:EOF
 )
 
+REM # cache directory
+SET "CACHEDIR=%HERE%\cache"
+REM # if it doesn't exist create it
+IF NOT EXIST "%CACHEDIR%" (
+	MKDIR "%CACHEDIR%"  >NUL 2>&1
+	REM # there's no cache to check!
+	EXIT /B 1
+)
+
 REM # detect 32-bit or 64-bit Windows
 SET "WINBIT=32"
 IF /I "%PROCESSOR_ARCHITECTURE%" == "EM64T" SET "WINBIT=64"	& REM # Itanium

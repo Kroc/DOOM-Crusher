@@ -282,7 +282,7 @@ FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.) DO (
 		REM # READ the first 1021 bytes of the lump.
 		REM # a truly brilliant solution, thanks to:
 		REM # http://stackoverflow.com/a/7827243
-		SET "HEADER=" & SET /P HEADER=< "%%~Z"
+		SET "HEADER=" & SET /P HEADER=< "%%~fZ"
 		
 		REM # a JPEG file?
 		REM # IMPORTANT: these bytes are "0xFF,0xD8"

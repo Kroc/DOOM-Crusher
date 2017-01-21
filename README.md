@@ -22,8 +22,6 @@ JPEG files are optimized using ["jpegtran"][1]:
 
 > jpegtran works by rearranging the compressed data (DCT coefficients), without ever fully decoding the image.  Therefore, its transformations are lossless: there is no image degradation at all ...
 
-The `-optimize` parameter is used to "perform optimization of entropy encoding parameters" which can shrink the file without changing the actual image at all.
-
 PNG files are run through a battery of optimizers:
 
 * [OptiPNG][2]
@@ -35,7 +33,8 @@ WAD files are first optimized by [WADPTR][6]:
 
 > WADPTR uses three seperate methods to compress WAD files: lump merging, graphic squashing and sidedef packing. These actually all work in quite similar ways. As well as compressing WADs, it also removes unused data in WADs (information that exists but is not part of any lump) and removes unused sidedefs (sidedefs that exist but are not bound to any linedef).
 
-WADs are then scanned for PNG and JPEG files and optimized as above.
+Sidedef packing is not used by DOOM-Crusher due to graphical glitches that may occure in certain WADs.
+WADs are then scanned for PNG and JPEG lumps and optimized as above.
 
 PK3 files are the WAD format used by modern DOOM engines. A PK3 file is just a renamed ZIP file. The file is unpacked and the contents are optimized as above (PK3 files can contain WAD files, which themselves can contain PNG & JPEG files).
 

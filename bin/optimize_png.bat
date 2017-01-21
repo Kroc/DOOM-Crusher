@@ -105,7 +105,7 @@ SET HASH_TRY="%HERE%\hash_check.bat" "png"
 SET HASH_ADD="%HERE%\hash_add.bat" "png"
 
 REM # check the file in the hash-cache
-CALL %HASH_CHECK% "%PNG_FILE%"
+CALL %HASH_TRY% "%PNG_FILE%"
 REM # the file is in the hash-cache, we can skip it
 IF %ERRORLEVEL% EQU 0 (
 	CALL :display_status_msg ": skipped (cache)"
