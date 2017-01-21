@@ -1,4 +1,4 @@
-v1.2    ?
+v1.2    21-JAN-17
 -       Fixed options not applying!
 -       Many major fixes and improvements to caching:
         
@@ -7,9 +7,11 @@ v1.2    ?
         +       Separate hashes into different buckets for file-type,
                 this resolves the issue `/ZSTORE` not repacking PK3s
                 that had been maximally compressed and cached
-
+        +       A "cache" folder is now used. Your existing "hashes.txt"
+                will be invalid due to critical bugs in v1.1, sorry :(
+        
 -       Fixes and improvements to filesize and percentage reporting
--       Added basic logging (a replica of what appears on screen),
+-       Added basic logging (a replica of what appears on screen), see "bin\log.txt",
         more advanced logging is planned which will capture full error details
 -       Signigicantly faster WAD processing
         (lumpmod modified to identify PNG/JPG lumps, with thanks to _mental_)
