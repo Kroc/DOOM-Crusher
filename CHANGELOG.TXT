@@ -1,3 +1,19 @@
+v1.2    ?
+-       Fixed options not applying! Very silly oversight on my part
+-       Many major fixes and improvements to caching:
+        
+        +       If skipping PNG/JPG files, allow a PK3/WAD to be added
+                to the cache if does not contain any such files
+        +       Separate hashes into different buckets for file-type,
+                this resolves the issue `/ZSTORE` not repacking PK3s
+                that had been maximally compressed and cached
+
+-       Fixes and improvements to filesize and percentage reporting
+-       Added basic logging (a replica of what appears on screen),
+        more advanced logging is planned which will capture full error details
+-       Signigicantly faster WAD processing
+        (lumpmod modified to identify PNG/JPG lumps, with thanks to _mental_)
+
 v1.1    13-JAN-17
 -       Skip files that have already been crushed before
         (a cache of file hashes is kept in `bin\hashes.txt`)

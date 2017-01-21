@@ -1,16 +1,18 @@
-@ECHO OFF
+@ECHO OFF & SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 
-REM # doom-crusher.bat : v1.1
+REM # doom-crusher.bat : v1.2
 REM ====================================================================================================================
 REM # optimize DOOM-related files: PK3 / WAD / PNG / JPG
 
-REM # path of this script
-REM # (do this before using `SHIFT`)
+REM # path of this script:
+REM # (must be done before using `SHIFT`)
 SET "HERE=%~dp0"
 IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
+REM # logging commands:
+SET LOG="%HERE%\bin\log.bat"
+SET LOG_ECHO="%HERE%\bin\log_echo.bat"
+SET LOG_CLEAR="%HERE%\bin\log_clear.bat"
 
-:options
-REM --------------------------------------------------------------------------------------------------------------------
 REM # default options
 SET "DO_PNG=1"
 SET "DO_JPG=1"
@@ -18,6 +20,8 @@ SET "DO_WAD=1"
 SET "DO_PK3=1"
 SET "ZSTORE=0"
 
+:options
+REM --------------------------------------------------------------------------------------------------------------------
 REM # use "/NOPNG" to disable PNG processing (the slowest part)
 IF /I "%~1" == "/NOPNG" (
 	REM # turn off PNG processing
@@ -57,7 +61,7 @@ IF /I "%~1" == "/ZSTORE" (
 REM # any file/folder parameters?
 REM --------------------------------------------------------------------------------------------------------------------
 IF "%~1" == "" (
-	ECHO doom-crusher.bat: v1.1 - Kroc Camen
+	ECHO doom-crusher.bat: v1.2 - Kroc Camen
 	ECHO:
 	ECHO Usage:
 	ECHO:
@@ -82,46 +86,58 @@ IF "%~1" == "" (
 	ECHO               the final size of .7Z and .RAR archives when using
 	ECHO               a very large dictionary size ^(256 MB or more^).
 	ECHO:
-	PAUSE & EXIT /B 0
+	EXIT /B 0
 )
 
 REM ====================================================================================================================
-ECHO:
-ECHO # doom-crusher : v1.1
-ECHO #     feedback : ^<github.com/Kroc/DOOM-Crusher^> or ^<kroc+doom@camendesign.com^>
-ECHO ###############################################################################
+REM # initialize log file
+CALL %LOG_CLEAR%
 
-REM # our component scripts
+ECHO:
+CALL %LOG_ECHO% "# doom-crusher : v1.2"
+CALL %LOG_ECHO% "#     feedback : <github.com/Kroc/DOOM-Crusher> or <kroc+doom@camendesign.com>"
+CALL %LOG_ECHO% "###############################################################################"
+
+REM # our component scripts:
 SET OPTIMIZE_PK3="%HERE%\bin\optimize_pk3.bat"
 SET OPTIMIZE_WAD="%HERE%\bin\optimize_wad.bat"
 SET OPTIMIZE_PNG="%HERE%\bin\optimize_png.bat"
 SET OPTIMIZE_JPG="%HERE%\bin\optimize_jpg.bat"
 
-REM # if we're skipping PNGs/JPGs, pass this requirement on to the PK3/WAD handlers
+REM # are we skipping PNGs?
 IF %DO_PNG% EQU 0 (
+	REM # pass that on to PK3/WAD processing as they may contain PNGs also
 	SET OPTIMIZE_PK3=%OPTIMIZE_PK3% /NOPNG
 	SET OPTIMIZE_WAD=%OPTIMIZE_WAD% /NOPNG
 )
+REM # are we skipping JPGs?
 IF %DO_JPG% EQU 0 (
+	REM # pass that on to PK3/WAD processing as they may contain JPGs also
 	SET OPTIMIZE_PK3=%OPTIMIZE_PK3% /NOJPG
 	SET OPTIMIZE_WAD=%OPTIMIZE_WAD% /NOJPG
 )
+REM # are we skipping WADs?
 IF %DO_WAD% EQU 0 (
+	REM # pass that on to the PK3 processing as they may contain WADs also
 	SET OPTIMIZE_PK3=%OPTIMIZE_PK3% /NOWAD
 )
+REM # do we want the PK3s uncompressed?
 IF %ZSTORE% EQU 1 (
+	REM # likewise, pass this requirement on
 	SET OPTIMIZE_PK3=%OPTIMIZE_PK3% /ZSTORE
 )
 
-REM # process parameter list
+
+REM # process parameter list:
 REM ====================================================================================================================
 :process_param
 REM # is this a directory?
 SET "ATTR=%~a1"
 IF /I "%ATTR:~0,1%" == "d" (
-	REM # the for loop works most reliably from the directory in question
-	PUSHD "%~dp1"
+	REM # the `FOR /R` loop works most reliably from the directory in question
+	PUSHD "%~f1"
 	REM # scan the directory given for crushable files
+	REM # note that "*." is a special term to select all files *without* an extension
 	FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.pk3;*.) DO (
 		REM # optimize known file types:
 		IF %DO_JPG% EQU 1 (
@@ -162,13 +178,14 @@ IF /I "%ATTR:~0,1%" == "d" (
 	REM # don't try process the parameter again
 	GOTO :next_param
 )
+
 REM # PK3 file:
-IF %DO_PK3% EQU 1 (
-	IF /I "%~x1" == ".PK3" CALL %OPTIMIZE_PK3% "%~f1"
+IF /I "%~x1" == ".PK3" (
+	IF %DO_PK3% EQU 1 CALL %OPTIMIZE_PK3% "%~f1"
 )
 REM # WAD file:
-IF %DO_WAD% EQU 1 (
-	IF /I "%~x1" == ".WAD" CALL %OPTIMIZE_WAD% "%~f1"
+IF /I "%~x1" == ".WAD" (
+	IF %DO_WAD% EQU 1 CALL %OPTIMIZE_WAD% "%~f1"
 )
 REM # PNG file:
 IF /I "%~x1" == ".PNG" (
@@ -187,6 +204,7 @@ IF "%~x1" == "" (
 	REM # a truly brilliant solution, thanks to:
 	REM # http://stackoverflow.com/a/7827243
 	SET "HEADER=" & SET /P HEADER=< "%~f1"
+	
 	REM # a JPEG file?
 	IF %DO_JPG% EQU 1 (
 		IF "!HEADER:~0,2!" == "ÿØ"  CALL %OPTIMIZE_JPG% "%~f1"
@@ -211,7 +229,8 @@ IF NOT "%~1" == "" (
 	GOTO :process_param
 )
 
-ECHO ###############################################################################
-ECHO # complete
+CALL %LOG_ECHO% "###############################################################################"
+CALL %LOG_ECHO% "# complete"
 ECHO:
 PAUSE
+EXIT /B 0

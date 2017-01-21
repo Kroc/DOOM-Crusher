@@ -4,4 +4,7 @@
 pngout/pngout.exe
 
 # ignore the user's hash cache file
-hashes.txt
+hashes*.txt
+
+# ignore the log file we generate
+log.txt

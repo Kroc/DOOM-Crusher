@@ -1,10 +1,13 @@
-@ECHO OFF
+@ECHO OFF & SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 
 REM # optimize_jpg.bat
 REM ====================================================================================================================
 REM # optimizes a single JPG file
 
 REM # %1 - filepath to a JPG / JPEG file
+
+REM --------------------------------------------------------------------------------------------------------------------
+CALL :init
 
 REM # any parameter?
 REM --------------------------------------------------------------------------------------------------------------------
@@ -43,12 +46,6 @@ IF NOT EXIST "%~1" (
 )
 
 REM ====================================================================================================================
-REM # we cannot get the updated size of the file without just-in-time variable expansion
-SETLOCAL ENABLEDELAYEDEXPANSION
-
-REM # path of this script
-SET "HERE=%~dp0"
-IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
 
 REM # absolute path of the JPG file
 SET "JPG_FILE=%~f1"
@@ -60,63 +57,131 @@ REM # -copy none	: don't keep any metadata
 SET EXEC_JPEGTRAN="%BIN_JPEG%" -optimize -copy none "%JPG_FILE%" "%JPG_FILE%"
 
 REM # display file name and current file size
-CALL :status_oldsize "%JPG_FILE%"
+CALL :display_status_left "%JPG_FILE%"
 
 REM # done this file before?
 REM --------------------------------------------------------------------------------------------------------------------
-CALL "%HERE%\hash_check.bat" "%JPG_FILE%"
+REM # hashing commands:
+SET HASH_TRY="%HERE%\hash_check.bat" "jpg"
+SET HASH_ADD="%HERE%\hash_add.bat" "jpg"
+
+REM # check the file in the hash-cache
+CALL %HASH_TRY% "%JPG_FILE%"
 REM # the file is in the hash-cache, we can skip it
 IF %ERRORLEVEL% EQU 0 (
-	ECHO : skipped ^(cache^)
+	CALL :display_status_msg ": skipped (cache)"
 	EXIT /B 0
 )
+
+REM ====================================================================================================================
 
 REM # do the actual optimization
 %EXEC_JPEGTRAN%  >NUL 2>&1
 IF ERRORLEVEL 1 (
 	REM # cap the status line
-	ECHO ^^!! error ^<pngout^>
+	CALL :display_status_msg "^! error <pngout>"
 ) ELSE (
 	REM # add the file to the hash-cache
-	CALL "%HERE%\hash_add.bat" "%JPG_FILE%"
+	CALL %HASH_ADD% "%JPG_FILE%"
 	REM # cap status line with the new file size
-	CALL :status_newsize "%JPG_FILE%"
+	CALL :display_status_right "%JPG_FILE%"
 )
 EXIT /B 0
 
+
+REM # functions:
 REM ====================================================================================================================
 
-:status_oldsize
+:init
+	REM # path of this script:
+	REM # (must be done before using `SHIFT`)
+	SET "HERE=%~dp0"
+	REM # always remove trailing slash
+	IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
+	REM # logging commands:
+	SET LOG="%HERE%\log.bat"
+	SET LOG_ECHO="%HERE%\log_echo.bat"
+	GOTO:EOF
+
+:filesize
+	REM # get a file size (in bytes):
+	REM # 	%1 = variable name to set
+	REM # 	%2 = filepath
+	REM ------------------------------------------------------------------------------------------------------------
+	SET "%~1=%~z2"
+	GOTO:EOF
+
+:display_status_left
+	REM # outputs the status line up to the original file's size:
+	REM #	%1 = filepath
+	REM ------------------------------------------------------------------------------------------------------------
 	REM # prepare the columns for output
-	SET "JPG_COLS=                                                                               "
-	SET "JPG_COL1_W=45"
-	SET "JPG_COL1=!JPG_COLS:~0,%JPG_COL1_W%!"
+	SET "COLS=                                                                               "
+	SET "COL1_W=45"
+	SET "COL1=!COLS:~0,%COL1_W%!"
 	REM # prepare the status line
-	SET "JPG_LINE=%~nx1%JPG_COL1%"
+	SET "LINE=%~nx1%COL1%"
 	REM # get the current file size
-	SET "JPG_SIZE_OLD=%~z1"
+	CALL :filesize SIZE_OLD "%~1"
 	REM # right-align it
-	CALL :format_filesize_bytes JPG_LINE_OLD %JPG_SIZE_OLD%
-	REM # output the status line (without new line)
-	<NUL (SET /P "$=- !JPG_LINE:~0,%JPG_COL1_W%! %JPG_LINE_OLD% ")
+	CALL :format_filesize_bytes LINE_OLD %SIZE_OLD%
+	REM # formulate the line
+	SET "STATUS_LEFT=* !LINE:~0,%COL1_W%! %LINE_OLD% "
+	REM # output the status line (without carriage-return)
+	<NUL (SET /P "$=%STATUS_LEFT%")
 	GOTO:EOF
 
-:status_newsize
-	SET "JPG_SIZE_NEW=%~z1"
-	REM # right-align the number
-	CALL :format_filesize_bytes JPG_LINE_NEW %JPG_SIZE_NEW%
-	REM # calculate percentage change
-	IF "%JPG_SIZE_NEW%" == "%JPG_SIZE_OLD%" (
-		SET /A JPG_SAVED=0
+:display_status_right
+	REM # assuming that the left-hand status is already displayed,
+	REM # append the size-reduction in percentage and new file size,
+	REM # and output the complete status line to the log
+	REM #
+	REM #	%1 = filepath
+	REM ------------------------------------------------------------------------------------------------------------
+	REM # get the updated file size
+	CALL :filesize SIZE_NEW "%~1"
+	REM # if the filesize increased:
+	IF %SIZE_NEW% GTR %SIZE_OLD% (
+		SET /A "SAVED=100*SIZE_NEW/SIZE_OLD,SAVED-=100"
+		SET "SAVED=   !SAVED!"
+		SET "SAVED=+!SAVED:~-3!"
 	) ELSE (
-		SET /A JPG_SAVED=100-100*JPG_SIZE_NEW/JPG_SIZE_OLD
+		IF %SIZE_NEW% EQU %SIZE_OLD% (
+			REM # avoid dividing by zero
+			SET /A SAVED=0
+			SET "SAVED==  0"
+		) ELSE (
+			SET /A "SAVED=100-100*SIZE_NEW/SIZE_OLD"
+			SET "SAVED=   !SAVED!"
+			SET "SAVED=-!SAVED:~-3!"
+		)
 	)
-	REM # align and print
-	SET "JPG_SAVED=   %JPG_SAVED%%%"
-	ECHO - %JPG_SAVED:~-3% = %JPG_LINE_NEW%
+	REM # format & right-align the new file size
+	CALL :format_filesize_bytes LINE_NEW %SIZE_NEW%
+	REM # formulate the line
+	SET "STATUS_RIGHT=%SAVED%%% = %LINE_NEW% "
+	REM # output the remainder of the status line and log the complete status line
+	ECHO %STATUS_RIGHT%
+	CALL %LOG% "%STATUS_LEFT%%STATUS_RIGHT%"
 	GOTO:EOF
-
+	
+:display_status_msg
+	REM # append a message to the status line and also output it to the log whole:
+	REM # 	%1 = message
+	REM ------------------------------------------------------------------------------------------------------------
+	REM # allow the parameter string to include exclamation marks
+	SETLOCAL DISABLEDELAYEDEXPANSION
+	SET "ECHO=%~1"
+	REM # now allow the parameter string to be displayed without trying to "execute" it
+	SETLOCAL ENABLEDELAYEDEXPANSION
+	REM # (note that the status line is displayed in two parts in the console, before and after file optimisation,
+	REM #  but needs to be output to the log file as a single line)
+	ECHO !ECHO!
+	CALL %LOG% "%STATUS_LEFT%!ECHO!"
+	ENDLOCAL & GOTO:EOF
+	
 :format_filesize_bytes
+	REM ------------------------------------------------------------------------------------------------------------
 	SETLOCAL
 	REM # add the thousands separators to the number
 	CALL :format_number_thousands RESULT %~2
@@ -127,6 +192,7 @@ REM ============================================================================
 	GOTO:EOF
 	
 :format_number_thousands
+	REM ------------------------------------------------------------------------------------------------------------
 	SETLOCAL
 	SET "RESULT="
 	SET "NUMBER=%~2"

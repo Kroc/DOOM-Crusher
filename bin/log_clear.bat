@@ -1,0 +1,7 @@
+@ECHO OFF
+
+SET "LOG_FILE=%~dp0"
+IF "%LOG_FILE:~-1,1%" == "\" SET "LOG_FILE=%LOG_FILE:~0,-1%"
+SET "LOG_FILE=%LOG_FILE%\log.txt"
+
+IF EXIST "%LOG_FILE%" DEL /F "%LOG_FILE%"

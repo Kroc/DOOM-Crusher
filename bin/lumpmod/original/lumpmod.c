@@ -1,6 +1,5 @@
 /*
-    LumpMod v0.2.1, a command-line utility for working with lumps in wad
-                    files.
+    LumpMod v0.21, a command-line utility for working with lumps in wad files.
     Copyright (C) 2003 Thunder Palace Entertainment.
 
     This program is free software; you can redistribute it and/or modify
@@ -592,19 +591,8 @@ int main(int argc, char *argv[]) {
             for(curlump = startitem->next; curlump != enditem; curlump =
                     curlump->next) {
                 i++;
-                if(verbose) {
-                    const char *format = "LMP";
-                    unsigned char *data = curlump->cl->data;
-                    if(data && curlump->cl->len > 16)
-                        if(data[0] == 0x89 && data[1] == 0x50 
-                                && data[2] == 0x4E && data[3] == 0x47)
-                            format = "PNG";
-                        else if(data[0] == 0xFF && data[1] == 0xD8 
-                                && data[2] == 0xFF)
-                            format = "JPG";
-                    printf("%5i %-8s %7li %s\n", i,
-                        get_lump_name(curlump->cl), curlump->cl->len, format);
-                }
+                if(verbose) printf("%5i %-8s %7li\n", i,
+                        get_lump_name(curlump->cl), curlump->cl->len);
                 else printf("%s\n", get_lump_name(curlump->cl));
             }
         } /* end of C_LIST */
