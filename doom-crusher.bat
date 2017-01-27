@@ -1,6 +1,6 @@
 @ECHO OFF & SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 
-REM # doom-crusher.bat : v1.2
+REM # doom-crusher.bat : v1.2.1
 REM ====================================================================================================================
 REM # optimize DOOM-related files: PK3 / WAD / PNG / JPG
 
@@ -61,7 +61,7 @@ IF /I "%~1" == "/ZSTORE" (
 REM # any file/folder parameters?
 REM --------------------------------------------------------------------------------------------------------------------
 IF "%~1" == "" (
-	ECHO doom-crusher.bat: v1.2 - Kroc Camen
+	ECHO doom-crusher.bat: v1.2.1 - Kroc Camen
 	ECHO:
 	ECHO Usage:
 	ECHO:
@@ -94,8 +94,19 @@ REM # initialize log file
 CALL %LOG_CLEAR%
 
 ECHO:
-CALL %LOG_ECHO% "# doom-crusher : v1.2"
+CALL %LOG_ECHO% "# doom-crusher : v1.2.1"
 CALL %LOG_ECHO% "#     feedback : <github.com/Kroc/DOOM-Crusher> or <kroc+doom@camendesign.com>"
+REM # display which options have been set
+SET "OPTIONS="
+IF %DO_PNG% EQU 0 SET "OPTIONS=%OPTIONS%/NOPNG "
+IF %DO_JPG% EQU 0 SET "OPTIONS=%OPTIONS%/NOJPG "
+IF %DO_WAD% EQU 0 SET "OPTIONS=%OPTIONS%/NOWAD "
+IF %DO_PK3% EQU 0 SET "OPTIONS=%OPTIONS%/NOPK3 "
+IF %ZSTORE% EQU 1 SET "OPTIONS=%OPTIONS%/ZSTORE"
+IF NOT "%OPTIONS%" == "" (
+	SET     "OPTIONS=#      options : %OPTIONS%"
+	CALL %LOG_ECHO% "!OPTIONS!"
+)
 CALL %LOG_ECHO% "###############################################################################"
 
 REM # our component scripts:
@@ -225,7 +236,6 @@ REM ============================================================================
 REM # is there another parameter?
 SHIFT
 IF NOT "%~1" == "" (
-	ECHO:
 	GOTO :process_param
 )
 

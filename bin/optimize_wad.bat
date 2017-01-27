@@ -21,6 +21,10 @@ REM # if PNG/JPG files are being skipped but this PK3 doesn't
 REM # contain any then we can still add the PK3 to the cache
 SET "ANY_PNG=0"
 SET "ANY_JPG=0"
+REM # if the WAD optimisation or optimisation of internal JPG/PNG files fail, return an error state; if the WAD was
+REM # from a PK3 then it will *not* be cached so that it will always be retried in the future until there are no errors
+REM # (we do not want to write off a PK3 as "done" when there are potential savings remaining)
+SET "ERROR=0"
 
 REM # any parameter?
 REM --------------------------------------------------------------------------------------------------------------------
@@ -215,24 +219,30 @@ FOR /F "tokens=1-4" %%A IN ('^" "%BIN_LUMPMOD%" "%TEMP_FILE%" list -v "^"') DO (
 			IF !ERRORLEVEL! EQU 0 (
 				REM # a PNG file?
 				IF "%%D" == "PNG" (
-					REM # the WAD contains a PNG file
+					REM # mark the WAD as containing at least one PNG file; this will
+					REM # preven the WAD file being cached if PNG files are being skipped
 					SET "ANY_PNG=1"
 					REM # is PNG processing enabled?
 					IF %DO_PNG% EQU 1 (
 						REM # display the split-line to indicate WAD contents
 						CALL :any_ok
 						CALL %OPTIMIZE_PNG% "!LUMP!"
+						REM # if that errored we won't cache the WAD
+						SET "ERROR=!ERRORLEVEL!"
 					)
 				)
 				REM # a JPEG file?
 				IF "%%D" == "JPG" (
-					REM # the WAD contains a JPG file
+					REM # mark the WAD as containing at least one JPG file; this will
+					REM # preven the WAD file being cached if JPG files are being skipped
 					SET "ANY_JPG=1"
 					REM # is JPEG processing enabled?
 					IF %DO_JPG% EQU 1 (
 						REM # display the split-line to indicate WAD contents
 						CALL :any_ok
 						CALL %OPTIMIZE_JPG% "!LUMP!"
+						REM # if that errored we won't cache the WAD
+						SET "ERROR=!ERRORLEVEL!"
 					)
 				)
 				REM # was the lump omptimized?
@@ -241,9 +251,18 @@ FOR /F "tokens=1-4" %%A IN ('^" "%BIN_LUMPMOD%" "%TEMP_FILE%" list -v "^"') DO (
 				REM # compare sizes
 				IF !LUMP_SIZE! LSS %%C (
 					REM # put the lump back into the WAD
-					%BIN_LUMPMOD% "%TEMP_FILE%" update %%B "!LUMP!" >NUL 2>&1
-					REM # TODO: handle error here?
+					%BIN_LUMPMOD% "%TEMP_FILE%" update "%%B" "!LUMP!" >NUL 2>&1
+					REM # if that errored we won't cache the WAD
+					IF !ERRORLEVEL! NEQ 0 SET "ERROR=1"
+					REM # TODO: display the file status line to show a lumpmod error?
 				)
+				
+			REM # extracting the lump did not succeed:
+			) ELSE (
+				REM # do not allow the WAD file to be cache,
+				REM # or any parent PK3 file
+				SET "ERROR=1"
+				REM # TODO: display the file status line to show a lumpmod error
 			)
 		)
 	)
@@ -274,6 +293,8 @@ IF !ERRORLEVEL! NEQ 0 (
 	REM # cap the status line to say that wadptr errored,
 	REM # but otherwise continue
 	CALL :display_status_msg "^! error <wadptr>"
+	REM # note error state so that the WAD will not be cached
+	SET "ERROR=1"
 ) ELSE (
 	REM # cap status line with the new file size
 	CALL :display_status_right "%TEMP_FILE%"
@@ -301,7 +322,8 @@ REM # remove the temporary directory (intentional duplicate)
 IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
 IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
 
-REM # add the file to the hash-cache
+REM # add the file to the hash-cache?
+IF %ERROR% EQU 1 SET "USE_CACHE=0"
 IF %DO_JPG% EQU 0 (
 	IF %ANY_JPG% EQU 1 SET "USE_CACHE=0"
 )
@@ -310,21 +332,11 @@ IF %DO_PNG% EQU 0 (
 )
 IF %USE_CACHE% EQU 1 CALL %HASH_ADD% "%WAD_FILE%"
 
-EXIT /B 0
+EXIT /B %ERROR%
 
 
 REM # functions:
 REM ====================================================================================================================
-
-:any_ok
-	REM # only display the split line for a WAD if there any lumps that will be optimised in the WAD
-	REM ------------------------------------------------------------------------------------------------------------
-	IF %ANY% EQU 0 (
-		CALL :display_status_msg ": processing..."
-		CALL %LOG_ECHO% "  -----------------------------------------------------------------------------"
-		SET "ANY=1"
-	)
-	GOTO:EOF
 
 :init
 	REM # path of this script:
@@ -335,6 +347,16 @@ REM ============================================================================
 	REM # logging commands:
 	SET LOG="%HERE%\log.bat"
 	SET LOG_ECHO="%HERE%\log_echo.bat"
+	GOTO:EOF
+
+:any_ok
+	REM # only display the split line for a WAD if there any lumps that will be optimised in the WAD
+	REM ------------------------------------------------------------------------------------------------------------
+	IF %ANY% EQU 0 (
+		CALL :display_status_msg ": processing..."
+		CALL %LOG_ECHO% "  -----------------------------------------------------------------------------"
+		SET "ANY=1"
+	)
 	GOTO:EOF
 
 :filesize

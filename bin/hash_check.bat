@@ -26,7 +26,7 @@ IF "%~1" == "" (
 	ECHO     Hashes a file using SHA256 and checks for presence of the hash in
 	ECHO     "hashes.txt". If present returns ERRORLEVEL 0, otherwise ERRORLEVEL 1.
 	ECHO:
-	GOTO:EOF
+	EXIT /B 0
 )
 
 REM # cache directory
@@ -51,13 +51,13 @@ IF "%WINBIT%" == "32" SET BIN_HASH="%HERE%\md5deep\sha256deep.exe"
 REM # has a suffix been specified?
 IF "%~2" == "" (
 	REM # cacnonical location of the hash-cache
-	SET HASHFILE="%HERE%\hashes.txt"
+	SET HASHFILE="%CACHEDIR%\hashes.txt"
 	SET "FILE=%~f1"
 	SET "NAME=%~nx1"
 ) ELSE (
-	SET HASHFILE="%HERE%\hashes_%~1.txt"
+	SET HASHFILE="%CACHEDIR%\hashes_%~1.txt"
 	SET "FILE=%~f2"
-	SET "NAME=%~nx1"
+	SET "NAME=%~nx2"
 )
 
 REM # if there is no hash file we can leave now

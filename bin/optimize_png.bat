@@ -50,8 +50,10 @@ IF NOT EXIST "%~1" (
 REM ====================================================================================================================
 REM # absolute path of the PNG file
 SET "PNG_FILE=%~f1"
-REM # after optimisation, the PNG file will be added to the cache so it can be skipped in the future
-SET "USE_CACHE=1"
+REM # if any of the PNG passes failed return an error state; if the PNG was from a WAD or PK3 then these
+REM # will *not* be cached so that they will always be retried in the future until there are no errors
+REM # (we do not want to write off a WAD or PK3 as "done" when there are potential savings remaining)
+SET "ERROR=0"
 
 REM --------------------------------------------------------------------------------------------------------------------
 
@@ -124,7 +126,7 @@ IF EXIST "%BIN_OPTIPNG%" (
 		REM # reprint the status line for the next iteration
 		CALL :display_status_left "%PNG_FILE%"
 		REM # if any of the PNG tools fail, do not add the file to the cache
-		SET "USE_CACHE=0"
+		SET "ERROR=1"
 	)
 )
 
@@ -141,7 +143,7 @@ IF EXIST "%BIN_PNGOUT%" (
 		REM # reprint the status line for the next iteration
 		CALL :display_status_left "%PNG_FILE%"
 		REM # if any of the PNG tools fail, do not add the file to the cache
-		SET "USE_CACHE=0"
+		SET "ERROR=1"
 	)
 )
 
@@ -157,7 +159,7 @@ IF EXIST "%BIN_PNGCRUSH%" (
 		REM # reprint the status line for the next iteration
 		CALL :display_status_left "%PNG_FILE%"
 		REM # if any of the PNG tools fail, do not add the file to the cache
-		SET "USE_CACHE=0"
+		SET "ERROR=1"
 	)
 )
 
@@ -170,17 +172,22 @@ IF EXIST "%BIN_DEFLOPT%" (
 	IF !ERRORLEVEL! NEQ 0 (
 		REM # cap the status line
 		CALL :display_status_msg "^! error <deflopt>"
-		EXIT /B 0
+		REM # exit with error so that any containing PK3/WAD
+		REM # is not written off as permenantly "done"
+		EXIT /B 1
 	)
 )
 
 REM # add the file to the hash-cache
-IF %USE_CACHE% EQU 1 CALL %HASH_ADD% "%PNG_FILE%"
+IF %ERROR% EQU 0 CALL %HASH_ADD% "%PNG_FILE%"
 
 REM # cap status line with the new file size
 CALL :display_status_right "%PNG_FILE%"
 
-EXIT /B 0
+REM # if any of the PNG passes failed return an error state; if the PNG was from a WAD or PK3 then these
+REM # will *not* be cached so that they will always be retried in the future until there are no errors
+REM # (we do not want to write off a WAD or PK3 as "done" when there are potential savings remaining)
+EXIT /B %ERROR%
 
 
 REM # functions:

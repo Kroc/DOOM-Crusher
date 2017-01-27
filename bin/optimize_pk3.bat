@@ -20,6 +20,10 @@ REM # contain any then we can still add the PK3 to the cache
 SET "ANY_PNG=0"
 SET "ANY_JPG=0"
 SET "ANY_WAD=0"
+REM # if the PK3 optimisation or optimisation of internal WAD/JPG/PNG files fail we do *not* add
+REM # the PK3 to the cache so that it will always be retried in the future until there are no errors
+REM # (we do not want to write off a PK3 as "done" when there are potential savings remaining)
+SET "ERROR=0"
 
 REM # any parameter?
 REM --------------------------------------------------------------------------------------------------------------------
@@ -49,7 +53,7 @@ IF "%~1" == "" (
 	ECHO               then using /ZSTORE on them might drastically improve
 	ECHO               the final size of .7Z and .RAR archives when using
 	ECHO               a very large dictionary size ^(256 MB or more^).
-	GOTO:EOF
+	EXIT /B 0
 )
 
 :options
@@ -252,19 +256,30 @@ FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.) DO (
 	REM # JPEG files:
 	IF /I "%%~xZ" == ".jpg" (
 		REM # if JPG optimisation is enabled, process the file
-		IF %DO_JPG% EQU 1 CALL %OPTIMIZE_JPG% "%%~fZ"
+		IF %DO_JPG% EQU 1 (
+			CALL %OPTIMIZE_JPG% "%%~fZ"
+			REM # if that errored we won't cache the PK3
+			SET "ERROR=!ERRORLEVEL!"
+		)
 		REM # mark the PK3 as containing at least one JPG file;
 		REM # this will prevent the PK3 file being cached if JPG files are being skipped
 		SET "ANY_JPG=1"
 	)
 	IF /I "%%~xZ" == ".jpeg" (
-		IF %DO_JPG% EQU 1 CALL %OPTIMIZE_JPG% "%%~fZ"
+		IF %DO_JPG% EQU 1 (
+			CALL %OPTIMIZE_JPG% "%%~fZ"
+			SET "ERROR=!ERRORLEVEL!"
+		)
 		SET "ANY_JPG=1"
 	)
 	REM # PNG files:
 	IF /I "%%~xZ" == ".png" (
 		REM # if PNG optimisation is enabled, process the file
-		IF %DO_PNG% EQU 1 CALL %OPTIMIZE_PNG% "%%~fZ"
+		IF %DO_PNG% EQU 1 (
+			CALL %OPTIMIZE_PNG% "%%~fZ"
+			REM # if that errored we won't cache the PK3
+			SET "ERROR=!ERRORLEVEL!"
+		)
 		REM # mark the PK3 as containing at least one PNG file;
 		REM # this will prevent the PK3 file being cached if JPG files are being skipped
 		SET "ANY_PNG=1"
@@ -272,7 +287,11 @@ FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.) DO (
 	REM # WAD files:
 	IF /I "%%~xZ" == ".wad" (
 		REM # if WAD optimisation is enabled, process the file
-		IF %DO_WAD% EQU 1 CALL %OPTIMIZE_WAD% "%%~fZ"
+		IF %DO_WAD% EQU 1 (
+			CALL %OPTIMIZE_WAD% "%%~fZ"
+			REM # if that errored we won't cache the PK3
+			SET "ERROR=!ERRORLEVEL!"
+		)
 		REM # mark the PK3 as containing at least one WAD file;
 		REM # this will prevent the PK3 file being cached if WAD files are being skipped
 		SET "ANY_WAD=1"
@@ -288,7 +307,11 @@ FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.) DO (
 		REM # IMPORTANT: these bytes are "0xFF,0xD8"
 		IF "!HEADER:~0,2!" == "ÿØ" (
 			REM # if JPG optimisation is enabled, process the file
-			IF %DO_JPG% EQU 1 CALL %OPTIMIZE_JPG% "%%~fZ"
+			IF %DO_JPG% EQU 1 (
+				CALL %OPTIMIZE_JPG% "%%~fZ"
+				REM # if that errored we won't cache the PK3
+				SET "ERROR=!ERRORLEVEL!"
+			)
 			REM # mark the PK3 as containing at least one JPG file;
 			REM # this will prevent the PK3 file being cached if JPG files are being skipped
 			SET "ANY_JPG=1"
@@ -296,7 +319,11 @@ FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.) DO (
 		REM # a PNG file?
 		IF "!HEADER:~1,3!" == "PNG" (
 			REM # if PNG optimisation is enabled, process the file
-			IF %DO_PNG% EQU 1 CALL %OPTIMIZE_PNG% "%%~fZ"
+			IF %DO_PNG% EQU 1 (
+				CALL %OPTIMIZE_PNG% "%%~fZ"
+				REM # if that errored we won't cache the PK3
+				SET "ERROR=!ERRORLEVEL!"
+			)
 			REM # mark the PK3 as containing at least one PNG file;
 			REM # this will prevent the PK3 file being cached if PNG files are being skipped
 			SET "ANY_PNG=1"
@@ -304,7 +331,11 @@ FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.) DO (
 		REM # a WAD file?
 		IF "!HEADER:~1,3!" == "WAD" (
 			REM # if WAD optimisation is enabled, process the file
-			IF %DO_WAD% EQU 1 CALL %OPTIMIZE_WAD% "%%~fZ"
+			IF %DO_WAD% EQU 1 (
+				CALL %OPTIMIZE_WAD% "%%~fZ"
+				REM # if that errored we won't cache the PK3
+				SET "ERROR=!ERRORLEVEL!"
+			)
 			REM # mark the PK3 as containing at least one WAD file;
 			REM # this will prevent the PK3 file being cached if WAD files are being skipped
 			SET "ANY_WAD=1"
@@ -365,15 +396,17 @@ REM # no need to deflopt the PK3 if it's uncompressed!
 IF %ZSTORE% EQU 0 (
 	REM # deflopt location
 	SET "BIN_DEFLOPT=%HERE%\deflopt\DeflOpt.exe"
-	REM # running deflopt can shave a few more bytes off of any DEFLATE-based content.
-	REM # if this fails, just continue, the original won't have been overwritten
+	REM # running deflopt can shave a few more bytes off of any DEFLATE-based content
 	"%BIN_DEFLOPT%" /a "%PK3_FILE%"  >NUL 2>&1
+	REM # if that errored we won't cache the PK3
+	SET "ERROR=!ERRORLEVEL!"
 )
 
 REM # cap the status line with the new file size
 CALL :display_status_right "%PK3_FILE%"
 
-REM # add the file to the hash-cache
+REM # add the file to the hash-cache?
+IF %ERROR% EQU 1 SET "USE_CACHE=0"
 IF %DO_JPG% EQU 0 (
 	IF %ANY_JPG% EQU 1 SET "USE_CACHE=0"
 )
@@ -410,7 +443,7 @@ IF EXIST "%TEMP_DIR%" (
 )
 
 CALL %LOG_ECHO%
-EXIT /B 0
+EXIT /B %ERROR%
 
 
 REM functions:

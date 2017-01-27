@@ -79,7 +79,11 @@ REM # do the actual optimization
 %EXEC_JPEGTRAN%  >NUL 2>&1
 IF ERRORLEVEL 1 (
 	REM # cap the status line
-	CALL :display_status_msg "^! error <pngout>"
+	CALL :display_status_msg "^! error <jpegtran>"
+	REM # if JPG optimisation failed return an error state; if the JPG was from a WAD or PK3 then these
+	REM # will *not* be cached so that they will always be retried in the future until there are no errors
+	REM # (we do not want to write off a WAD or PK3 as "done" when there are potential savings remaining)
+	EXIT /B 1
 ) ELSE (
 	REM # add the file to the hash-cache
 	CALL %HASH_ADD% "%JPG_FILE%"
