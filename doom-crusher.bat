@@ -1,6 +1,6 @@
 @ECHO OFF & SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
 
-REM # doom-crusher.bat : v1.2.1
+REM # doom-crusher.bat : v1.3
 REM ====================================================================================================================
 REM # optimize DOOM-related files: PK3 / WAD / PNG / JPG
 
@@ -61,7 +61,7 @@ IF /I "%~1" == "/ZSTORE" (
 REM # any file/folder parameters?
 REM --------------------------------------------------------------------------------------------------------------------
 IF "%~1" == "" (
-	ECHO doom-crusher.bat: v1.2.1 - Kroc Camen
+	ECHO doom-crusher.bat: v1.3 - Kroc Camen
 	ECHO:
 	ECHO Usage:
 	ECHO:
@@ -94,7 +94,7 @@ REM # initialize log file
 CALL %LOG_CLEAR%
 
 ECHO:
-CALL %LOG_ECHO% "# doom-crusher : v1.2.1"
+CALL %LOG_ECHO% "# doom-crusher : v1.3"
 CALL %LOG_ECHO% "#     feedback : <github.com/Kroc/DOOM-Crusher> or <kroc+doom@camendesign.com>"
 REM # display which options have been set
 SET "OPTIONS="
@@ -149,7 +149,7 @@ IF /I "%ATTR:~0,1%" == "d" (
 	PUSHD "%~f1"
 	REM # scan the directory given for crushable files
 	REM # note that "*." is a special term to select all files *without* an extension
-	FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.pk3;*.) DO (
+	FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.pk3;*.lmp;*.) DO (
 		REM # optimize known file types:
 		IF %DO_JPG% EQU 1 (
 			IF /I "%%~xZ" == ".JPG"  CALL %OPTIMIZE_JPG% "%%~fZ"
@@ -164,8 +164,12 @@ IF /I "%ATTR:~0,1%" == "d" (
 		IF %DO_PK3% EQU 1 (
 			IF /I "%%~xZ" == ".PK3"  CALL %OPTIMIZE_PK3% "%%~fZ"
 		)
-		REM # files without an extension
-		IF "%%~xZ" == "" (
+		REM # files with "lmp" exetension or no extension at all
+		REM # must be examined to determine their type
+		SET "IS_LUMP=0"
+		IF /I "%%~xZ" == ".lmp" SET "IS_LUMP=1"
+		IF "%%~xZ" == "" SET "IS_LUMP=1"
+		IF "!IS_LUMP!" == "1" (
 			REM # READ the first 1021 bytes of the lump.
 			REM # a truly brilliant solution, thanks to:
 			REM # http://stackoverflow.com/a/7827243

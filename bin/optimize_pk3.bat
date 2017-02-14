@@ -98,7 +98,7 @@ IF NOT EXIST "%~1" (
 	ECHO:
 	ECHO Command:
 	ECHO:
-	ECHO     optimize_pk3.bat %0
+	ECHO     optimize_pk3.bat %*
 	ECHO:
 	ECHO Current Directory:
 	ECHO:
@@ -252,7 +252,7 @@ REM # find all optimizable files:
 REM # (you can't use variables in the `FOR /R` parameter)
 PUSHD "%TEMP_DIR%"
 
-FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.) DO (
+FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.lmp;*.) DO (
 	REM # JPEG files:
 	IF /I "%%~xZ" == ".jpg" (
 		REM # if JPG optimisation is enabled, process the file
@@ -296,8 +296,12 @@ FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.) DO (
 		REM # this will prevent the PK3 file being cached if WAD files are being skipped
 		SET "ANY_WAD=1"
 	)
-	REM # files without an extension:
-	IF "%%~xZ" == "" (
+	REM # files with "lmp" exetension or no extension at all
+	REM # must be examined to determine their type
+	SET "IS_LUMP=0"
+	IF /I "%%~xZ" == ".lmp" SET "IS_LUMP=1"
+	IF "%%~xZ" == "" SET "IS_LUMP=1"
+	IF "!IS_LUMP!" == "1" (
 		REM # READ the first 1021 bytes of the lump.
 		REM # a truly brilliant solution, thanks to:
 		REM # http://stackoverflow.com/a/7827243
@@ -497,26 +501,22 @@ REM ============================================================================
 	REM ------------------------------------------------------------------------------------------------------------
 	REM # get the updated file size
 	CALL :filesize SIZE_NEW "%~1"
-	REM # if the filesize increased:
-	IF %SIZE_NEW% GTR %SIZE_OLD% (
-		SET /A "SAVED=100*SIZE_NEW/SIZE_OLD,SAVED-=100"
-		SET "SAVED=   !SAVED!"
-		SET "SAVED=+!SAVED:~-3!"
+	REM # no change in size?
+	IF %SIZE_NEW% EQU %SIZE_OLD% (
+		SET "STATUS_RIGHT==  0%% : same size"
 	) ELSE (
-		IF %SIZE_NEW% EQU %SIZE_OLD% (
-			REM # avoid dividing by zero
-			SET /A SAVED=0
-			SET "SAVED==  0"
+		CALL "%HERE%\get_percentage.bat" SAVED %SIZE_OLD% %SIZE_NEW%
+		SET "SAVED=   !SAVED!"
+		IF %SIZE_NEW% GTR %SIZE_OLD% (
+			SET "SAVED=+!SAVED:~-3!"
 		) ELSE (
-			SET /A "SAVED=100-100*SIZE_NEW/SIZE_OLD"
-			SET "SAVED=   !SAVED!"
 			SET "SAVED=-!SAVED:~-3!"
 		)
+		REM # format & right-align the new file size
+		CALL :format_filesize_bytes LINE_NEW %SIZE_NEW%
+		REM # formulate the line
+		SET "STATUS_RIGHT=!SAVED!%% = !LINE_NEW! "
 	)
-	REM # format & right-align the new file size
-	CALL :format_filesize_bytes LINE_NEW %SIZE_NEW%
-	REM # formulate the line
-	SET "STATUS_RIGHT=%SAVED%%% = %LINE_NEW% "
 	REM # output the remainder of the status line and log the complete status line
 	ECHO %STATUS_RIGHT%
 	CALL %LOG% "%STATUS_LEFT%%STATUS_RIGHT%"

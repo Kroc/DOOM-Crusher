@@ -36,7 +36,7 @@ IF NOT EXIST "%~1" (
 	ECHO:
 	ECHO Command:
 	ECHO:
-	ECHO     optimize_jpg.bat %0
+	ECHO     optimize_jpg.bat %*
 	ECHO:
 	ECHO Current Directory:
 	ECHO:
@@ -144,26 +144,22 @@ REM ============================================================================
 	REM ------------------------------------------------------------------------------------------------------------
 	REM # get the updated file size
 	CALL :filesize SIZE_NEW "%~1"
-	REM # if the filesize increased:
-	IF %SIZE_NEW% GTR %SIZE_OLD% (
-		SET /A "SAVED=100*SIZE_NEW/SIZE_OLD,SAVED-=100"
-		SET "SAVED=   !SAVED!"
-		SET "SAVED=+!SAVED:~-3!"
+	REM # no change in size?
+	IF %SIZE_NEW% EQU %SIZE_OLD% (
+		SET "STATUS_RIGHT==  0%% : same size"
 	) ELSE (
-		IF %SIZE_NEW% EQU %SIZE_OLD% (
-			REM # avoid dividing by zero
-			SET /A SAVED=0
-			SET "SAVED==  0"
+		CALL "%HERE%\get_percentage.bat" SAVED %SIZE_OLD% %SIZE_NEW%
+		SET "SAVED=   !SAVED!"
+		IF %SIZE_NEW% GTR %SIZE_OLD% (
+			SET "SAVED=+!SAVED:~-3!"
 		) ELSE (
-			SET /A "SAVED=100-100*SIZE_NEW/SIZE_OLD"
-			SET "SAVED=   !SAVED!"
 			SET "SAVED=-!SAVED:~-3!"
 		)
+		REM # format & right-align the new file size
+		CALL :format_filesize_bytes LINE_NEW %SIZE_NEW%
+		REM # formulate the line
+		SET "STATUS_RIGHT=!SAVED!%% = !LINE_NEW! "
 	)
-	REM # format & right-align the new file size
-	CALL :format_filesize_bytes LINE_NEW %SIZE_NEW%
-	REM # formulate the line
-	SET "STATUS_RIGHT=%SAVED%%% = %LINE_NEW% "
 	REM # output the remainder of the status line and log the complete status line
 	ECHO %STATUS_RIGHT%
 	CALL %LOG% "%STATUS_LEFT%%STATUS_RIGHT%"
