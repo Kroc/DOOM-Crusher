@@ -1,4 +1,4 @@
-@ECHO OFF & SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
+@ECHO OFF & SETLOCAL ENABLEEXTENSIONS DISABLEDELAYEDEXPANSION
 
 REM # optimize_png.bat
 REM ====================================================================================================================
@@ -114,70 +114,75 @@ IF %ERRORLEVEL% EQU 0 (
 	EXIT /B 0
 )
 
-REM # optipng:
+:optipng
 REM --------------------------------------------------------------------------------------------------------------------
-IF EXIST "%BIN_OPTIPNG%" (
-	REM # execute optipng
-	%EXEC_OPTIPNG%  >NUL 2>&1
-	REM # if this fails:
-	IF !ERRORLEVEL! NEQ 0 (
-		REM # cap the status line
-		CALL :display_status_msg "^! error <optipng>"
-		REM # reprint the status line for the next iteration
-		CALL :display_status_left "%PNG_FILE%"
-		REM # if any of the PNG tools fail, do not add the file to the cache
-		SET "ERROR=1"
-	)
+REM # skip if not present
+IF NOT EXIST "%BIN_OPTIPNG%" GOTO :pngout
+
+REM # execute optipng
+%EXEC_OPTIPNG%  >NUL 2>&1
+REM # if this fails:
+IF %ERRORLEVEL% NEQ 0 (
+	REM # cap the status line
+	CALL :display_status_msg "! error <optipng>"
+	REM # reprint the status line for the next iteration
+	CALL :display_status_left "%PNG_FILE%"
+	REM # if any of the PNG tools fail, do not add the file to the cache
+	SET "ERROR=1"
 )
 
-REM # pngout:
+:pngout
 REM --------------------------------------------------------------------------------------------------------------------
-IF EXIST "%BIN_PNGOUT%" (
-	REM # execute pngout
-	%EXEC_PNGOUT%  >NUL 2>&1
-	REM # if this fails:
-	REM # NOTE: pngout returns 2 for "unable to compress further", technically not an error!
-	IF !ERRORLEVEL! EQU 1 (
-		REM # cap the status line
-		CALL :display_status_msg "^! error <pngout>"
-		REM # reprint the status line for the next iteration
-		CALL :display_status_left "%PNG_FILE%"
-		REM # if any of the PNG tools fail, do not add the file to the cache
-		SET "ERROR=1"
-	)
+REM # skip if not present
+IF NOT EXIST "%BIN_PNGOUT%" GOTO :pngcrush
+
+REM # execute pngout
+%EXEC_PNGOUT%  >NUL 2>&1
+REM # if this fails:
+REM # NOTE: pngout returns 2 for "unable to compress further", technically not an error!
+IF %ERRORLEVEL% EQU 1 (
+	REM # cap the status line
+	CALL :display_status_msg "! error <pngout>"
+	REM # reprint the status line for the next iteration
+	CALL :display_status_left "%PNG_FILE%"
+	REM # if any of the PNG tools fail, do not add the file to the cache
+	SET "ERROR=1"
 )
 
-REM # pngcrush:
+:pngcrush
 REM --------------------------------------------------------------------------------------------------------------------
-IF EXIST "%BIN_PNGCRUSH%" (
-	REM # execute pngcrush
-	%EXEC_PNGCRUSH%  >NUL 2>&1
-	REM # if this fails:
-	IF !ERRORLEVEL! NEQ 0 (
-		REM # cap the status line
-		CALL :display_status_msg "^! error <pngcrush>"
-		REM # reprint the status line for the next iteration
-		CALL :display_status_left "%PNG_FILE%"
-		REM # if any of the PNG tools fail, do not add the file to the cache
-		SET "ERROR=1"
-	)
+REM # skip if not present
+IF NOT EXIST "%BIN_PNGCRUSH%" GOTO :deflopt
+
+REM # execute pngcrush
+%EXEC_PNGCRUSH%  >NUL 2>&1
+REM # if this fails:
+IF %ERRORLEVEL% NEQ 0 (
+	REM # cap the status line
+	CALL :display_status_msg "! error <pngcrush>"
+	REM # reprint the status line for the next iteration
+	CALL :display_status_left "%PNG_FILE%"
+	REM # if any of the PNG tools fail, do not add the file to the cache
+	SET "ERROR=1"
 )
 
-REM # deflate optimization:
+:deflopt
 REM --------------------------------------------------------------------------------------------------------------------
-IF EXIST "%BIN_DEFLOPT%" (
-	REM # execute deflopt
-	%EXEC_DEFLOPT%  >NUL 2>&1
-	REM # if this fails:
-	IF !ERRORLEVEL! NEQ 0 (
-		REM # cap the status line
-		CALL :display_status_msg "^! error <deflopt>"
-		REM # exit with error so that any containing PK3/WAD
-		REM # is not written off as permenantly "done"
-		EXIT /B 1
-	)
+REM # skip if not present
+IF NOT EXIST "%BIN_DEFLOPT%" GOTO :finish
+
+REM # execute deflopt
+%EXEC_DEFLOPT%  >NUL 2>&1
+REM # if this fails:
+IF %ERRORLEVEL% NEQ 0 (
+	REM # cap the status line
+	CALL :display_status_msg "! error <deflopt>"
+	REM # exit with error so that any containing PK3/WAD
+	REM # is not written off as permenantly "done"
+	EXIT /B 1
 )
 
+:finish
 REM # add the file to the hash-cache
 IF %ERROR% EQU 0 CALL %HASH_ADD% "%PNG_FILE%"
 
@@ -214,22 +219,20 @@ REM ============================================================================
 
 :display_status_left
 	REM # outputs the status line up to the original file's size:
+	REM #
 	REM #	%1 = filepath
 	REM ------------------------------------------------------------------------------------------------------------
-	REM # prepare the columns for output
-	SET "COLS=                                                                               "
-	SET "COL1_W=45"
-	SET "COL1=!COLS:~0,%COL1_W%!"
-	REM # prepare the status line
-	SET "LINE=%~nx1%COL1%"
 	REM # get the current file size
 	CALL :filesize SIZE_OLD "%~1"
-	REM # right-align it
+	REM # prepare the status line (column is 45-wide)
+	SET "LINE_NAME=%~nx1                                             "
+	SET "LINE_NAME=%LINE_NAME:~0,45%"
+	REM # right-align the file size
 	CALL :format_filesize_bytes LINE_OLD %SIZE_OLD%
 	REM # formulate the line
-	SET "STATUS_LEFT=* !LINE:~0,%COL1_W%! %LINE_OLD% "
+	SET "STATUS_LEFT=* %LINE_NAME% %LINE_OLD% "
 	REM # output the status line (without carriage-return)
-	<NUL (SET /P "$=%STATUS_LEFT%")
+	<NUL (SET /P "STATUS_LEFT=%STATUS_LEFT%")
 	GOTO:EOF
 
 :display_status_right
@@ -244,19 +247,20 @@ REM ============================================================================
 	REM # no change in size?
 	IF %SIZE_NEW% EQU %SIZE_OLD% (
 		SET "STATUS_RIGHT==  0%% : same size"
-	) ELSE (
-		CALL "%HERE%\get_percentage.bat" SAVED %SIZE_OLD% %SIZE_NEW%
-		SET "SAVED=   !SAVED!"
-		IF %SIZE_NEW% GTR %SIZE_OLD% (
-			SET "SAVED=+!SAVED:~-3!"
-		) ELSE (
-			SET "SAVED=-!SAVED:~-3!"
-		)
-		REM # format & right-align the new file size
-		CALL :format_filesize_bytes LINE_NEW %SIZE_NEW%
-		REM # formulate the line
-		SET "STATUS_RIGHT=!SAVED!%% = !LINE_NEW! "
+		GOTO :display_status_right__echo
 	)
+	REM # calculate the perctange difference
+	CALL "%HERE%\get_percentage.bat" SAVED %SIZE_OLD% %SIZE_NEW%
+	SET "SAVED=   %SAVED%"
+	REM # increase or decrease in size?
+	IF %SIZE_NEW% GTR %SIZE_OLD% SET "SAVED=+%SAVED:~-3%"
+	IF %SIZE_NEW% LSS %SIZE_OLD% SET "SAVED=-%SAVED:~-3%"
+	REM # format & right-align the new file size
+	CALL :format_filesize_bytes LINE_NEW %SIZE_NEW%
+	REM # formulate the line
+	SET "STATUS_RIGHT=%SAVED%%% = %LINE_NEW% "
+	
+	:display_status_right__echo
 	REM # output the remainder of the status line and log the complete status line
 	ECHO %STATUS_RIGHT%
 	CALL %LOG% "%STATUS_LEFT%%STATUS_RIGHT%"
@@ -264,6 +268,7 @@ REM ============================================================================
 	
 :display_status_msg
 	REM # append a message to the status line and also output it to the log whole:
+	REM #
 	REM # 	%1 = message
 	REM ------------------------------------------------------------------------------------------------------------
 	REM # allow the parameter string to include exclamation marks
