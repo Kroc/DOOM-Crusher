@@ -1,4 +1,4 @@
-@ECHO OFF & SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
+@ECHO OFF & SETLOCAL ENABLEEXTENSIONS DISABLEDELAYEDEXPANSION
 
 REM # optimize_wad.bat
 REM ====================================================================================================================
@@ -144,7 +144,7 @@ IF EXIST "%TEMP_DIR%" (
 	RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
 	REM # could not clean up?
 	IF ERRORLEVEL 1 (
-		CALL :display_status_msg "^! error <rmdir>"
+		CALL :display_status_msg "! error <rmdir>"
 		CALL %LOG_ECHO% "==============================================================================="
 		CALL %LOG_ECHO%
 		CALL %LOG_ECHO% "ERROR: Could not remove directory:"
@@ -160,7 +160,7 @@ IF NOT EXIST "%TEMP_DIR%" (
 	MKDIR "%TEMP_DIR%"  >NUL 2>&1
 	REM # failed?
 	IF ERRORLEVEL 1 (
-		CALL :display_status_msg "^! error <mkdir>"
+		CALL :display_status_msg "! error <mkdir>"
 		CALL %LOG_ECHO% "==============================================================================="
 		CALL %LOG_ECHO%
 		CALL %LOG_ECHO% "ERROR: Could not create directory:"
@@ -176,7 +176,7 @@ COPY /Y "%WAD_FILE%" "%TEMP_FILE%"  >NUL 2>&1
 REM # did the copy fail?
 IF ERRORLEVEL 1 (
 	REM # cap the status line to say that the copy errored
-	CALL :display_status_msg "^! error <copy>"
+	CALL :display_status_msg "! error <copy>"
 	REM # remove the temporary directory (duplicate on purpose)
 	IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
 	IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
@@ -184,6 +184,7 @@ IF ERRORLEVEL 1 (
 	EXIT /B 1
 )
 
+:wad
 REM # examine the WAD contents for optimizable files (PNG/JPG/WAD)
 REM ====================================================================================================================
 REM # we'll avoid displaying the split-line if the WAD doesn't contain any lumps we can optimise
@@ -191,83 +192,104 @@ SET "ANY=0"
 
 REM # list the WAD contents and get the name and length of each lump,
 REM # lumpmod.exe has been modified to also provide the filetype, with thanks to _mental_
+REM # TODO: need to set `eol` to something not present in LUMP names
 REM # (use of quotes in a FOR command here is fraught with complications:
 REM #  http://stackoverflow.com/questions/22636308)
-FOR /F "tokens=1-4" %%A IN ('^" "%BIN_LUMPMOD%" "%TEMP_FILE%" list -v "^"') DO (
-	REM # lumps of length 0 are just markers and can be skipped
-	IF NOT "%%C" == "0" (
-		REM # only process JPG or PNG lumps
-		IF NOT "%%D" == "LMP" (
-			REM # ensure the lump name can be written to disk
-			REM # (may contain invalid file-system characters)
-			REM # TODO : handle astrisk, very difficult to do properly
-			SET "LUMP=%%B"
-			SET "LUMP=!LUMP:<=_!"
-			SET "LUMP=!LUMP:>=_!"
-			SET "LUMP=!LUMP::=_!"
-			SET 'LUMP=!LUMP:"=_!'
-			SET "LUMP=!LUMP:/=_!"
-			SET "LUMP=!LUMP:\=_!"
-			SET "LUMP=!LUMP:|=_!"
-			SET "LUMP=!LUMP:?=_!"
-			REM # this is where the lump will go
-			SET "LUMP=%TEMP_DIR%\!LUMP!.%%D"
-			
-			REM # extract the lump to disk to optimize it
-			%BIN_LUMPMOD% "%TEMP_FILE%" extract %%B "!LUMP!" >NUL 2>&1
-			REM # only continue if this succeeded
-			IF !ERRORLEVEL! EQU 0 (
-				REM # a PNG file?
-				IF "%%D" == "PNG" (
-					REM # mark the WAD as containing at least one PNG file; this will
-					REM # preven the WAD file being cached if PNG files are being skipped
-					SET "ANY_PNG=1"
-					REM # is PNG processing enabled?
-					IF %DO_PNG% EQU 1 (
-						REM # display the split-line to indicate WAD contents
-						CALL :any_ok
-						CALL %OPTIMIZE_PNG% "!LUMP!"
-						REM # if that errored we won't cache the WAD
-						SET "ERROR=!ERRORLEVEL!"
-					)
-				)
-				REM # a JPEG file?
-				IF "%%D" == "JPG" (
-					REM # mark the WAD as containing at least one JPG file; this will
-					REM # preven the WAD file being cached if JPG files are being skipped
-					SET "ANY_JPG=1"
-					REM # is JPEG processing enabled?
-					IF %DO_JPG% EQU 1 (
-						REM # display the split-line to indicate WAD contents
-						CALL :any_ok
-						CALL %OPTIMIZE_JPG% "!LUMP!"
-						REM # if that errored we won't cache the WAD
-						SET "ERROR=!ERRORLEVEL!"
-					)
-				)
-				REM # was the lump omptimized?
-				REM # (the orginal lump size is already in `%%C`)
-				CALL :filesize LUMP_SIZE "!LUMP!"
-				REM # compare sizes
-				IF !LUMP_SIZE! LSS %%C (
-					REM # put the lump back into the WAD
-					%BIN_LUMPMOD% "%TEMP_FILE%" update "%%B" "!LUMP!" >NUL 2>&1
-					REM # if that errored we won't cache the WAD
-					IF !ERRORLEVEL! NEQ 0 SET "ERROR=1"
-					REM # TODO: display the file status line to show a lumpmod error?
-				)
-				
-			REM # extracting the lump did not succeed:
-			) ELSE (
-				REM # do not allow the WAD file to be cache,
-				REM # or any parent PK3 file
-				SET "ERROR=1"
-				REM # TODO: display the file status line to show a lumpmod error
-			)
-		)
-	)
-)
+FOR /F "tokens=1-4" %%A IN ('^" "%BIN_LUMPMOD%" "%TEMP_FILE%" list -v "^"') DO CALL :wad__lump "%%A" "%%B" "%%C" "%%D"
+REM # skip over the lump processing loop
+GOTO :wad__finish
 
+:wad__lump
+	REM # %1 = lump ID
+	REM # %2 = lump name
+	REM # %3 = lump size
+	REM # %4 = lump type (PNG, JPG or LMP)
+	
+	REM # lumps of length 0 are just markers and can be skipped
+	IF "%~3" == "0" GOTO:EOF
+	REM # only process JPG or PNG lumps
+	IF "%~4" == "LMP" GOTO:EOF
+	
+	REM # ensure the lump name can be written to disk
+	REM # (may contain invalid file-system characters)
+	REM # TODO : handle astrisk, very difficult to do properly
+	SET "LUMP=%~2"
+	SET "LUMP=%LUMP:<=_%"
+	SET "LUMP=%LUMP:>=_%"
+	SET "LUMP=%LUMP::=_%"
+	SET 'LUMP=%LUMP:"=_%'
+	SET "LUMP=%LUMP:/=_%"
+	SET "LUMP=%LUMP:\=_%"
+	SET "LUMP=%LUMP:|=_%"
+	SET "LUMP=%LUMP:?=_%"
+	SET "LUMP=%LUMP:!=_%"
+	SET "LUMP=%LUMP:&=_%"
+	REM # this is where the lump will go
+	SET "LUMP=%TEMP_DIR%\%LUMP%.%~4"
+	
+	REM # extract the lump to disk to optimize it
+	%BIN_LUMPMOD% "%TEMP_FILE%" extract %~2 "%LUMP%" >NUL 2>&1
+	REM # only continue if this succeeded
+	IF %ERRORLEVEL% GTR 0 (
+		REM # do not allow the WAD file to be cached,
+		REM # or any parent PK3 file
+		SET "ERROR=1"
+		REM # TODO: display the file status line to show a lumpmod error
+		GOTO:EOF
+	)
+	
+	REM # PNG files:
+	:wad__lump_png
+	REM # if not a PNG, skip ahead
+	IF NOT "%~4" == "PNG" GOTO :wad__lump_jpg
+	
+	REM # mark the WAD as containing at least one PNG file; this will
+	REM # prevent the WAD file being cached if PNG files are being skipped
+	SET "ANY_PNG=1"
+	REM # is PNG processing enabled?
+	IF %DO_PNG% EQU 0 GOTO :wad__lump_jpg
+	
+	REM # display the split-line to indicate WAD contents
+	CALL :any_ok
+	CALL %OPTIMIZE_PNG% "%LUMP%"
+	REM # if that errored we won't cache the WAD
+	SET "ERROR=%ERRORLEVEL%"
+	REM # was a PNG, skip JPG handling
+	GOTO :wad__lump_test
+	
+	REM # JPG files:
+	:wad__lump_jpg
+	REM # if not a JPG... well that should be impossible
+	IF NOT "%~4" == "JPG" GOTO:EOF
+	
+	REM # mark the WAD as containing at least one JPG file; this will
+	REM # prevent the WAD file being cached if JPG files are being skipped
+	SET "ANY_JPG=1"
+	REM # is JPEG processing enabled?
+	IF %DO_JPG% EQU 0 GOTO :wad__lump_test
+	
+	REM # display the split-line to indicate WAD contents
+	CALL :any_ok
+	CALL %OPTIMIZE_JPG% "%LUMP%"
+	REM # if that errored we won't cache the WAD
+	SET "ERROR=%ERRORLEVEL%"
+	
+	:wad__lump_test
+	REM # was the lump omptimized?
+	REM # (the orginal lump size is already in `%~3`)
+	CALL :filesize LUMP_SIZE "%LUMP%"
+	REM # compare sizes
+	IF %LUMP_SIZE% GEQ %~3 GOTO:EOF
+	
+	REM # put the lump back into the WAD
+	%BIN_LUMPMOD% "%TEMP_FILE%" update "%~2" "%LUMP%" >NUL 2>&1
+	REM # if that errored we won't cache the WAD
+	IF %ERRORLEVEL% NEQ 0 SET "ERROR=1"
+	
+	REM # TODO: display the file status line to show a lumpmod error?
+	GOTO:EOF
+
+:wad__finish
 REM # restore the previous working directory
 POPD
 
@@ -292,7 +314,7 @@ REM # if this errors, the WAD won't have been changed so we can continue
 IF %ERRORLEVEL% NEQ 0 (
 	REM # cap the status line to say that wadptr errored,
 	REM # but otherwise continue
-	CALL :display_status_msg "^! error <wadptr>"
+	CALL :display_status_msg "! error <wadptr>"
 	REM # note error state so that the WAD will not be cached
 	SET "ERROR=1"
 ) ELSE (
@@ -369,22 +391,20 @@ REM ============================================================================
 
 :display_status_left
 	REM # outputs the status line up to the original file's size:
+	REM #
 	REM #	%1 = filepath
 	REM ------------------------------------------------------------------------------------------------------------
-	REM # prepare the columns for output
-	SET "COLS=                                                                               "
-	SET "COL1_W=45"
-	SET "COL1=!COLS:~0,%COL1_W%!"
-	REM # prepare the status line
-	SET "LINE=%~nx1%COL1%"
 	REM # get the current file size
 	CALL :filesize SIZE_OLD "%~1"
-	REM # right-align it
+	REM # prepare the status line (column is 45-wide)
+	SET "LINE_NAME=%~nx1                                             "
+	SET "LINE_NAME=%LINE_NAME:~0,45%"
+	REM # right-align the file size
 	CALL :format_filesize_bytes LINE_OLD %SIZE_OLD%
 	REM # formulate the line
-	SET "STATUS_LEFT=* !LINE:~0,%COL1_W%! %LINE_OLD% "
+	SET "STATUS_LEFT=* %LINE_NAME% %LINE_OLD% "
 	REM # output the status line (without carriage-return)
-	<NUL (SET /P "$=%STATUS_LEFT%")
+	<NUL (SET /P "STATUS_LEFT=%STATUS_LEFT%")
 	GOTO:EOF
 
 :display_status_right
@@ -399,19 +419,20 @@ REM ============================================================================
 	REM # no change in size?
 	IF %SIZE_NEW% EQU %SIZE_OLD% (
 		SET "STATUS_RIGHT==  0%% : same size"
-	) ELSE (
-		CALL "%HERE%\get_percentage.bat" SAVED %SIZE_OLD% %SIZE_NEW%
-		SET "SAVED=   !SAVED!"
-		IF %SIZE_NEW% GTR %SIZE_OLD% (
-			SET "SAVED=+!SAVED:~-3!"
-		) ELSE (
-			SET "SAVED=-!SAVED:~-3!"
-		)
-		REM # format & right-align the new file size
-		CALL :format_filesize_bytes LINE_NEW %SIZE_NEW%
-		REM # formulate the line
-		SET "STATUS_RIGHT=!SAVED!%% = !LINE_NEW! "
+		GOTO :display_status_right__echo
 	)
+	REM # calculate the perctange difference
+	CALL "%HERE%\get_percentage.bat" SAVED %SIZE_OLD% %SIZE_NEW%
+	SET "SAVED=   %SAVED%"
+	REM # increase or decrease in size?
+	IF %SIZE_NEW% GTR %SIZE_OLD% SET "SAVED=+%SAVED:~-3%"
+	IF %SIZE_NEW% LSS %SIZE_OLD% SET "SAVED=-%SAVED:~-3%"
+	REM # format & right-align the new file size
+	CALL :format_filesize_bytes LINE_NEW %SIZE_NEW%
+	REM # formulate the line
+	SET "STATUS_RIGHT=%SAVED%%% = %LINE_NEW% "
+	
+	:display_status_right__echo
 	REM # output the remainder of the status line and log the complete status line
 	ECHO %STATUS_RIGHT%
 	CALL %LOG% "%STATUS_LEFT%%STATUS_RIGHT%"

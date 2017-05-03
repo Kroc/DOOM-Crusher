@@ -8,4 +8,4 @@ pngout/pngout.exe
 cache/**
 
 # ignore the log file we generate
-log.txt
+log*.txt

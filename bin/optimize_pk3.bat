@@ -474,22 +474,20 @@ REM ============================================================================
 
 :display_status_left
 	REM # outputs the status line up to the original file's size:
+	REM #
 	REM #	%1 = filepath
 	REM ------------------------------------------------------------------------------------------------------------
-	REM # prepare the columns for output
-	SET "COLS=                                                                               "
-	SET "COL1_W=45"
-	SET "COL1=!COLS:~0,%COL1_W%!"
-	REM # prepare the status line
-	SET "LINE=%~nx1%COL1%"
 	REM # get the current file size
 	CALL :filesize SIZE_OLD "%~1"
-	REM # right-align it
+	REM # prepare the status line (column is 45-wide)
+	SET "LINE_NAME=%~nx1                                             "
+	SET "LINE_NAME=%LINE_NAME:~0,45%"
+	REM # right-align the file size
 	CALL :format_filesize_bytes LINE_OLD %SIZE_OLD%
 	REM # formulate the line
-	SET "STATUS_LEFT=* !LINE:~0,%COL1_W%! %LINE_OLD% "
+	SET "STATUS_LEFT=* %LINE_NAME% %LINE_OLD% "
 	REM # output the status line (without carriage-return)
-	<NUL (SET /P "$=%STATUS_LEFT%")
+	<NUL (SET /P "STATUS_LEFT=%STATUS_LEFT%")
 	GOTO:EOF
 
 :display_status_right
@@ -504,19 +502,20 @@ REM ============================================================================
 	REM # no change in size?
 	IF %SIZE_NEW% EQU %SIZE_OLD% (
 		SET "STATUS_RIGHT==  0%% : same size"
-	) ELSE (
-		CALL "%HERE%\get_percentage.bat" SAVED %SIZE_OLD% %SIZE_NEW%
-		SET "SAVED=   !SAVED!"
-		IF %SIZE_NEW% GTR %SIZE_OLD% (
-			SET "SAVED=+!SAVED:~-3!"
-		) ELSE (
-			SET "SAVED=-!SAVED:~-3!"
-		)
-		REM # format & right-align the new file size
-		CALL :format_filesize_bytes LINE_NEW %SIZE_NEW%
-		REM # formulate the line
-		SET "STATUS_RIGHT=!SAVED!%% = !LINE_NEW! "
+		GOTO :display_status_right__echo
 	)
+	REM # calculate the perctange difference
+	CALL "%HERE%\get_percentage.bat" SAVED %SIZE_OLD% %SIZE_NEW%
+	SET "SAVED=   %SAVED%"
+	REM # increase or decrease in size?
+	IF %SIZE_NEW% GTR %SIZE_OLD% SET "SAVED=+%SAVED:~-3%"
+	IF %SIZE_NEW% LSS %SIZE_OLD% SET "SAVED=-%SAVED:~-3%"
+	REM # format & right-align the new file size
+	CALL :format_filesize_bytes LINE_NEW %SIZE_NEW%
+	REM # formulate the line
+	SET "STATUS_RIGHT=%SAVED%%% = %LINE_NEW% "
+	
+	:display_status_right__echo
 	REM # output the remainder of the status line and log the complete status line
 	ECHO %STATUS_RIGHT%
 	CALL %LOG% "%STATUS_LEFT%%STATUS_RIGHT%"
