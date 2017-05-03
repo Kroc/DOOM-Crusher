@@ -21,8 +21,8 @@ IF "%~1" == "" (
 	ECHO Notes:
 	ECHO:
 	ECHO     Optimizes a PNG file without any reduction in quality.
-        ECHO     Retains the "grAb" and "alPh" chunks specifically for
-        ECHO     compatibility with DOOM engines.
+    	ECHO     Retains the "grAb" and "alPh" chunks specifically for
+    	ECHO     compatibility with DOOM engines.
 	ECHO:
 	GOTO:EOF
 )
@@ -210,7 +210,8 @@ REM ============================================================================
 	GOTO:EOF
 
 :filesize
-	REM # get a file size (in bytes):
+	REM # get a file size, in bytes:
+	REM #
 	REM # 	%1 = variable name to set
 	REM # 	%2 = filepath
 	REM ------------------------------------------------------------------------------------------------------------

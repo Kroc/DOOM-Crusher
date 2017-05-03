@@ -1,4 +1,4 @@
-@ECHO OFF & SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
+@ECHO OFF & SETLOCAL ENABLEEXTENSIONS DISABLEDELAYEDEXPANSION
 
 REM # doom-crusher.bat : v1.3
 REM ====================================================================================================================
@@ -104,8 +104,7 @@ IF %DO_WAD% EQU 0 SET "OPTIONS=%OPTIONS%/NOWAD "
 IF %DO_PK3% EQU 0 SET "OPTIONS=%OPTIONS%/NOPK3 "
 IF %ZSTORE% EQU 1 SET "OPTIONS=%OPTIONS%/ZSTORE"
 IF NOT "%OPTIONS%" == "" (
-	SET     "OPTIONS=#      options : %OPTIONS%"
-	CALL %LOG_ECHO% "!OPTIONS!"
+	CALL %LOG_ECHO% "#      options : %OPTIONS%"
 )
 CALL %LOG_ECHO% "###############################################################################"
 
@@ -142,98 +141,25 @@ IF %ZSTORE% EQU 1 (
 REM # process parameter list:
 REM ====================================================================================================================
 :process_param
-REM # is this a directory?
+
+REM # check if parameter is a directory
+REM # (this returns the file attributes, a "d" is added for directories)
 SET "ATTR=%~a1"
-IF /I "%ATTR:~0,1%" == "d" (
-	REM # the `FOR /R` loop works most reliably from the directory in question
-	PUSHD "%~f1"
-	REM # scan the directory given for crushable files
-	REM # note that "*." is a special term to select all files *without* an extension
-	FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.pk3;*.lmp;*.) DO (
-		REM # optimize known file types:
-		IF %DO_JPG% EQU 1 (
-			IF /I "%%~xZ" == ".JPG"  CALL %OPTIMIZE_JPG% "%%~fZ"
-			IF /I "%%~xZ" == ".JPEG" CALL %OPTIMIZE_JPG% "%%~fZ"
-		)
-		IF %DO_PNG% EQU 1 (
-			IF /I "%%~xZ" == ".PNG"  CALL %OPTIMIZE_PNG% "%%~fZ"
-		)
-		IF %DO_WAD% EQU 1 (
-			IF /I "%%~xZ" == ".WAD"  CALL %OPTIMIZE_WAD% "%%~fZ"
-		)
-		IF %DO_PK3% EQU 1 (
-			IF /I "%%~xZ" == ".PK3"  CALL %OPTIMIZE_PK3% "%%~fZ"
-		)
-		REM # files with "lmp" exetension or no extension at all
-		REM # must be examined to determine their type
-		SET "IS_LUMP=0"
-		IF /I "%%~xZ" == ".lmp" SET "IS_LUMP=1"
-		IF "%%~xZ" == "" SET "IS_LUMP=1"
-		IF "!IS_LUMP!" == "1" (
-			REM # READ the first 1021 bytes of the lump.
-			REM # a truly brilliant solution, thanks to:
-			REM # http://stackoverflow.com/a/7827243
-			SET "HEADER=" & SET /P HEADER=< "%%~Z"
-			REM # a JPEG file?
-			IF %DO_JPG% EQU 1 (
-				IF "!HEADER:~0,2!" == "ÿØ"  CALL %OPTIMIZE_JPG% "%%~fZ"
-			)
-			REM # a PNG file?
-			IF %DO_PNG% EQU 1 (
-				IF "!HEADER:~1,3!" == "PNG" CALL %OPTIMIZE_PNG% "%%~fZ"
-			)
-			REM # a WAD file?
-			IF %DO_WAD% EQU 1 (
-				IF "!HEADER:~1,3!" == "WAD" CALL %OPTIMIZE_WAD% "%%~fZ"
-			)
-		)
-	)
-	REM # put that thing back where it came from, or so help me
-	POPD
-	REM # don't try process the parameter again
-	GOTO :next_param
-)
+IF /I "%ATTR:~0,1%" == "d" GOTO :process_dir
 
-REM # PK3 file:
-IF /I "%~x1" == ".PK3" (
-	IF %DO_PK3% EQU 1 CALL %OPTIMIZE_PK3% "%~f1"
-)
-REM # WAD file:
-IF /I "%~x1" == ".WAD" (
-	IF %DO_WAD% EQU 1 CALL %OPTIMIZE_WAD% "%~f1"
-)
-REM # PNG file:
-IF /I "%~x1" == ".PNG" (
-	IF %DO_PNG% EQU 1 CALL %OPTIMIZE_PNG% "%~f1"
-)
-REM # JPG file:
-IF %DO_JPG% EQU 1 (
-	IF /I "%~x1" == ".JPG"  CALL %OPTIMIZE_JPG% "%~f1"
-	IF /I "%~x1" == ".JPEG" CALL %OPTIMIZE_JPG% "%~f1"
-)
+REM # otherwise, it's a file path
+CALL :process_file "%~f1"
+GOTO :next_param
 
-REM # no file extension, or not a known file extension? -- examine contents
+:process_dir
 REM --------------------------------------------------------------------------------------------------------------------
-IF "%~x1" == "" (
-	REM # READ the first 1021 bytes of the lump.
-	REM # a truly brilliant solution, thanks to:
-	REM # http://stackoverflow.com/a/7827243
-	SET "HEADER=" & SET /P HEADER=< "%~f1"
-	
-	REM # a JPEG file?
-	IF %DO_JPG% EQU 1 (
-		IF "!HEADER:~0,2!" == "ÿØ"  CALL %OPTIMIZE_JPG% "%~f1"
-	)
-	REM # a PNG file?
-	IF %DO_PNG% EQU 1 (
-		IF "!HEADER:~1,3!" == "PNG" CALL %OPTIMIZE_PNG% "%~f1"
-	)
-	REM # a WAD file?
-	IF %DO_WAD% EQU 1 (
-		IF "!HEADER:~1,3!" == "WAD" CALL %OPTIMIZE_WAD% "%~f1"
-	)
-)
-
+REM # the `FOR /R` loop works most reliably from the directory in question
+PUSHD "%~f1"
+REM # scan the directory given for crushable files
+REM # note that "*." is a special term to select all files *without* an extension
+FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.pk3;*.lmp;*.) DO CALL :process_file "%%~fZ"
+REM # put that thing back where it came from, or so help me
+POPD
 
 :next_param
 REM ====================================================================================================================
@@ -248,3 +174,55 @@ CALL %LOG_ECHO% "# complete"
 ECHO:
 PAUSE
 EXIT /B 0
+
+
+REM # functions:
+REM ====================================================================================================================
+
+:process_file
+	REM # determine the file type of a file and process it accordingly
+	REM #
+	REM #	%1 = full path of file to process
+
+	REM # optimize known file types:
+	IF %DO_JPG% EQU 1 (
+		IF /I "%~x1" == ".JPG"  CALL %OPTIMIZE_JPG% "%~1"
+		IF /I "%~x1" == ".JPEG" CALL %OPTIMIZE_JPG% "%~1"
+	)
+	IF %DO_PNG% EQU 1 (
+		IF /I "%~x1" == ".PNG"  CALL %OPTIMIZE_PNG% "%~1"
+	)
+	IF %DO_WAD% EQU 1 (
+		IF /I "%~x1" == ".WAD"  CALL %OPTIMIZE_WAD% "%~1"
+	)
+	IF %DO_PK3% EQU 1 (
+		IF /I "%~x1" == ".PK3"  CALL %OPTIMIZE_PK3% "%~1"
+	)
+
+	REM # files with "lmp" exetension or no extension at all
+	REM # must be examined to determine their type
+	SET "IS_LUMP=0"
+	IF /I "%~x1" == ".lmp" SET "IS_LUMP=1"
+	IF    "%~x1" == ""     SET "IS_LUMP=1"
+	REM # if not a lump file, skip the file
+	IF "%IS_LUMP%" == "0" GOTO:EOF
+
+	REM # READ the first 1021 bytes of a file. a truly brilliant solution, thanks to:
+	REM # http://stackoverflow.com/a/7827243
+	SET "HEADER=" & SET /P HEADER=< "%~1"
+	
+	REM # a JPEG file?
+	IF %DO_JPG% EQU 1 (
+		IF "%HEADER:~0,2%" == "��"  CALL %OPTIMIZE_JPG% "%~1"
+	)
+	REM # a PNG file?
+	IF %DO_PNG% EQU 1 (
+		IF "%HEADER:~1,3%" == "PNG" CALL %OPTIMIZE_PNG% "%~1"
+	)
+	REM # a WAD file?
+	IF %DO_WAD% EQU 1 (
+		IF "%HEADER:~1,3%" == "WAD" CALL %OPTIMIZE_WAD% "%~1"
+	)
+
+	REM # file processed
+	GOTO:EOF
