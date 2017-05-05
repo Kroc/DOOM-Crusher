@@ -4,27 +4,31 @@ REM # optimize_pk3.bat
 REM ====================================================================================================================
 REM # optimizes a PK3 (DOOM WAD) file. This is a zip-file containing DOOM resources.
 
-REM # %1 - filepath to a PK3 file
-
+REM # init
 REM --------------------------------------------------------------------------------------------------------------------
-CALL :init
+REM # path of this script:
+REM # (must be done before using `SHIFT`)
+SET "HERE=%~dp0"
+IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
 
-REM # default options
-SET "DO_PNG=1"
-SET "DO_JPG=1"
-SET "DO_WAD=1"
-SET "ZSTORE=0"
-SET "USE_CACHE=1"
-REM # if PNG/JPG/WAD files are being skipped but this PK3 doesn't
-REM # contain any then we can still add the PK3 to the cache
-SET "ANY_PNG=0"
-SET "ANY_JPG=0"
-SET "ANY_WAD=0"
-REM # if the PK3 optimisation or optimisation of internal WAD/JPG/PNG files fail we do *not* add
-REM # the PK3 to the cache so that it will always be retried in the future until there are no errors
-REM # (we do not want to write off a PK3 as "done" when there are potential savings remaining)
-SET "ERROR=0"
+REM # check for an echo parameter (enables ECHO)
+SET "ECHO="
+IF /I "%~1" == "/ECHO" (
+	REM # the "/ECHO" parameter will be passed to all called scripts too
+	SET "ECHO=/ECHO"
+	REM # re-enable ECHO
+	ECHO ON
+	REM # remove the parameter
+	SHIFT
+)
 
+REM # logging commands:
+SET LOG="%HERE%\bin\log.bat" %ECHO%
+SET LOG_ECHO="%HERE%\bin\log_echo.bat" %ECHO%
+
+
+:params
+REM ====================================================================================================================
 REM # any parameter?
 REM --------------------------------------------------------------------------------------------------------------------
 IF "%~1" == "" (
@@ -55,6 +59,22 @@ IF "%~1" == "" (
 	ECHO               a very large dictionary size ^(256 MB or more^).
 	EXIT /B 0
 )
+
+REM # default options
+SET "DO_PNG=1"
+SET "DO_JPG=1"
+SET "DO_WAD=1"
+SET "ZSTORE=0"
+SET "USE_CACHE=1"
+REM # if PNG/JPG/WAD files are being skipped but this PK3 doesn't
+REM # contain any then we can still add the PK3 to the cache
+SET "ANY_PNG=0"
+SET "ANY_JPG=0"
+SET "ANY_WAD=0"
+REM # if the PK3 optimisation or optimisation of internal WAD/JPG/PNG files fail we do *not* add
+REM # the PK3 to the cache so that it will always be retried in the future until there are no errors
+REM # (we do not want to write off a PK3 as "done" when there are potential savings remaining)
+SET "ERROR=0"
 
 :options
 REM --------------------------------------------------------------------------------------------------------------------
@@ -123,9 +143,9 @@ IF "%WINBIT%" == "64" SET BIN_7ZA="%HERE%\7za\7za_x64.exe"
 IF "%WINBIT%" == "32" SET BIN_7ZA="%HERE%\7za\7za.exe"
 
 REM # our component scripts
-SET OPTIMIZE_WAD="%HERE%\optimize_wad.bat"
-SET OPTIMIZE_PNG="%HERE%\optimize_png.bat"
-SET OPTIMIZE_JPG="%HERE%\optimize_jpg.bat"
+SET OPTIMIZE_WAD="%HERE%\optimize_wad.bat" %ECHO%
+SET OPTIMIZE_PNG="%HERE%\optimize_png.bat" %ECHO%
+SET OPTIMIZE_JPG="%HERE%\optimize_jpg.bat" %ECHO%
 
 REM # if we're skipping PNGs/JPGs, pass this requirement on to the WAD handler
 IF %DO_PNG% EQU 0 SET OPTIMIZE_WAD=%OPTIMIZE_WAD% /NOPNG
@@ -137,8 +157,8 @@ CALL :display_status_left "%~f1"
 REM # done this file before?
 REM --------------------------------------------------------------------------------------------------------------------
 REM # hashing commands:
-SET HASH_TRY="%HERE%\hash_check.bat"
-SET HASH_ADD="%HERE%\hash_add.bat"
+SET HASH_TRY="%HERE%\hash_check.bat" %ECHO%
+SET HASH_ADD="%HERE%\hash_add.bat" %ECHO%
 REM # if storing PK3 files uncompressed, use a different hash file so that we can easily identify PK3 files that
 REM # may have been crushed before with maximum compression, but which will need to be repacked without compression
 IF %ZSTORE% EQU 1 (
@@ -453,19 +473,9 @@ EXIT /B %ERROR%
 REM functions:
 REM ====================================================================================================================
 
-:init
-	REM # path of this script:
-	REM # (must be done before using `SHIFT`)
-	SET "HERE=%~dp0"
-	REM # always remove trailing slash
-	IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
-	REM # logging commands:
-	SET LOG="%HERE%\log.bat"
-	SET LOG_ECHO="%HERE%\log_echo.bat"
-	GOTO:EOF
-
 :filesize
-	REM # get a file size (in bytes):
+	REM # get a file size, in bytes:
+	REM #
 	REM # 	%1 = variable name to set
 	REM # 	%2 = filepath
 	REM ------------------------------------------------------------------------------------------------------------
@@ -505,7 +515,7 @@ REM ============================================================================
 		GOTO :display_status_right__echo
 	)
 	REM # calculate the perctange difference
-	CALL "%HERE%\get_percentage.bat" SAVED %SIZE_OLD% %SIZE_NEW%
+	CALL "%HERE%\get_percentage.bat" %ECHO% SAVED %SIZE_OLD% %SIZE_NEW%
 	SET "SAVED=   %SAVED%"
 	REM # increase or decrease in size?
 	IF %SIZE_NEW% GTR %SIZE_OLD% SET "SAVED=+%SAVED:~-3%"
@@ -523,6 +533,7 @@ REM ============================================================================
 	
 :display_status_msg
 	REM # append a message to the status line and also output it to the log whole:
+	REM #
 	REM # 	%1 = message
 	REM ------------------------------------------------------------------------------------------------------------
 	REM # allow the parameter string to include exclamation marks

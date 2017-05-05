@@ -4,14 +4,63 @@ REM # doom-crusher.bat : v1.3
 REM ====================================================================================================================
 REM # optimize DOOM-related files: PK3 / WAD / PNG / JPG
 
+SET "VER=1.3"
+
+REM # init
+REM --------------------------------------------------------------------------------------------------------------------
 REM # path of this script:
 REM # (must be done before using `SHIFT`)
 SET "HERE=%~dp0"
 IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
+
+REM # check for an echo parameter (enables ECHO)
+SET "ECHO="
+IF /I "%~1" == "/ECHO" (
+	REM # the "/ECHO" parameter will be passed to all called scripts too
+	SET "ECHO=/ECHO"
+	REM # re-enable ECHO
+	ECHO ON
+	REM # remove the parameter
+	SHIFT
+)
+
 REM # logging commands:
-SET LOG="%HERE%\bin\log.bat"
-SET LOG_ECHO="%HERE%\bin\log_echo.bat"
-SET LOG_CLEAR="%HERE%\bin\log_clear.bat"
+SET LOG="%HERE%\bin\log.bat" %ECHO%
+SET LOG_ECHO="%HERE%\bin\log_echo.bat" %ECHO%
+SET LOG_CLEAR="%HERE%\bin\log_clear.bat" %ECHO%
+
+:params
+REM ====================================================================================================================
+REM # any file/folder parameters?
+REM --------------------------------------------------------------------------------------------------------------------
+IF "%~1" == "" (
+	ECHO doom-crusher.bat: v%VER% - Kroc Camen
+	ECHO:
+	ECHO Usage:
+	ECHO:
+	ECHO     Drag-and-drop file^(s^) and/or folder^(s^) onto "doom-crusher.bat",
+	ECHO     or use from a command-line / batch-file:
+	ECHO:
+	ECHO         doom-crusher.bat [options] folder-or-file [...]
+	ECHO:
+	ECHO     "options" can be any of:
+	ECHO:	 
+	ECHO     /NOPNG  : Skip processing PNG files
+	ECHO     /NOJPG  : Skip processing JPG files
+	ECHO     /NOWAD  : Skip processing WAD files
+	ECHO     /NOPK3  : Skip processing PK3 files
+	ECHO:
+	ECHO     /ZSTORE : Use no compression when re-packing PK3s.
+	ECHO               Whilst the PK3 file will be larger than before,
+	ECHO               it will boot faster.
+	ECHO:
+	ECHO               If you are compressing a number of PK3s together,
+	ECHO               then using /ZSTORE on them might drastically improve
+	ECHO               the final size of .7Z and .RAR archives when using
+	ECHO               a very large dictionary size ^(256 MB or more^).
+	ECHO:
+	EXIT /B 0
+)
 
 REM # default options
 SET "DO_PNG=1"
@@ -58,43 +107,13 @@ IF /I "%~1" == "/ZSTORE" (
 	SHIFT & GOTO :options
 )
 
-REM # any file/folder parameters?
-REM --------------------------------------------------------------------------------------------------------------------
-IF "%~1" == "" (
-	ECHO doom-crusher.bat: v1.3 - Kroc Camen
-	ECHO:
-	ECHO Usage:
-	ECHO:
-	ECHO     Drag-and-drop file^(s^) and/or folder^(s^) onto "doom-crusher.bat",
-	ECHO     or use from a command-line / batch-file:
-	ECHO:
-	ECHO         doom-crusher.bat [options] folder-or-file [...]
-	ECHO:
-	ECHO     "options" can be any of:
-	ECHO:	 
-	ECHO     /NOPNG  : Skip processing PNG files
-	ECHO     /NOJPG  : Skip processing JPG files
-	ECHO     /NOWAD  : Skip processing WAD files
-	ECHO     /NOPK3  : Skip processing PK3 files
-	ECHO:
-	ECHO     /ZSTORE : Use no compression when re-packing PK3s.
-	ECHO               Whilst the PK3 file will be larger than before,
-	ECHO               it will boot faster.
-	ECHO:
-	ECHO               If you are compressing a number of PK3s together,
-	ECHO               then using /ZSTORE on them might drastically improve
-	ECHO               the final size of .7Z and .RAR archives when using
-	ECHO               a very large dictionary size ^(256 MB or more^).
-	ECHO:
-	EXIT /B 0
-)
 
 REM ====================================================================================================================
 REM # initialize log file
 CALL %LOG_CLEAR%
 
 ECHO:
-CALL %LOG_ECHO% "# doom-crusher : v1.3"
+CALL %LOG_ECHO% "# doom-crusher : v%VER%"
 CALL %LOG_ECHO% "#     feedback : <github.com/Kroc/DOOM-Crusher> or <kroc+doom@camendesign.com>"
 REM # display which options have been set
 SET "OPTIONS="
@@ -109,10 +128,10 @@ IF NOT "%OPTIONS%" == "" (
 CALL %LOG_ECHO% "###############################################################################"
 
 REM # our component scripts:
-SET OPTIMIZE_PK3="%HERE%\bin\optimize_pk3.bat"
-SET OPTIMIZE_WAD="%HERE%\bin\optimize_wad.bat"
-SET OPTIMIZE_PNG="%HERE%\bin\optimize_png.bat"
-SET OPTIMIZE_JPG="%HERE%\bin\optimize_jpg.bat"
+SET OPTIMIZE_PK3="%HERE%\bin\optimize_pk3.bat" %ECHO%
+SET OPTIMIZE_WAD="%HERE%\bin\optimize_wad.bat" %ECHO%
+SET OPTIMIZE_PNG="%HERE%\bin\optimize_png.bat" %ECHO%
+SET OPTIMIZE_JPG="%HERE%\bin\optimize_jpg.bat" %ECHO%
 
 REM # are we skipping PNGs?
 IF %DO_PNG% EQU 0 (

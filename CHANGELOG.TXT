@@ -1,3 +1,7 @@
+v1.3    ?
+-       /ECHO parameter will enable ECHO throughout
+        (will tell you where syntax / expansion errors occur)
+
 v1.2    21-JAN-17
 -       Fixed options not applying!
 -       Many major fixes and improvements to caching:

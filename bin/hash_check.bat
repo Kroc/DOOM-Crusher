@@ -1,16 +1,33 @@
-@ECHO OFF
+@ECHO OFF & SETLOCAL ENABLEEXTENSIONS DISABLEDELAYEDEXPANSION
 
 REM # hash_check.bat
 REM ====================================================================================================================
 REM # check if a file hash is listed in hashes.txt
+REM #
+REM # 	%1 - optional suffix for "hashes.txt", allowing you to separate hash sets, e.g. "hashes_png.txt"
+REM # 	%2 - filepath of file to check the hash of in hashes.txt
 
-REM # %1 - optional suffix for "hashes.txt", allowing you to separate hash sets, e.g. "hashes_png.txt"
-REM # %2 - filepath of file to check the hash of in hashes.txt
-
-REM # path of this script
-REM # (do this before using `SHIFT`)
+REM # init
+REM --------------------------------------------------------------------------------------------------------------------
+REM # path of this script:
+REM # (must be done before using `SHIFT`)
 SET "HERE=%~dp0"
 IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
+
+REM # check for an echo parameter (enables ECHO)
+SET "ECHO="
+IF /I "%~1" == "/ECHO" (
+	REM # the "/ECHO" parameter will be passed to all called scripts too
+	SET "ECHO=/ECHO"
+	REM # re-enable ECHO
+	ECHO ON
+	REM # remove the parameter
+	SHIFT
+)
+
+REM # logging commands:
+SET LOG="%HERE%\bin\log.bat" %ECHO%
+SET LOG_ECHO="%HERE%\bin\log_echo.bat" %ECHO%
 
 REM # any parameter?
 REM --------------------------------------------------------------------------------------------------------------------

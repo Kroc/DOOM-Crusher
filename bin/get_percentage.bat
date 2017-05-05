@@ -3,15 +3,37 @@
 REM # get_percentage.bat
 REM ====================================================================================================================
 REM # calculate the percentage difference between two values
-
-REM # %1 - variable name to set with the result
-REM # %2 - the first (old) value
-REM # %3 - the second (new) value
+REM #
+REM # 	%1 - variable name to set with the result
+REM # 	%2 - the first (old) value
+REM # 	%3 - the second (new) value
 
 REM # NOTES:
 REM # * neither number can be greater than or equal to 2'147'483'648 (2 GB in bytes)
 
+REM # init
 REM --------------------------------------------------------------------------------------------------------------------
+REM # path of this script:
+REM # (must be done before using `SHIFT`)
+SET "HERE=%~dp0"
+IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
+
+REM # check for an echo parameter (enables ECHO)
+SET "ECHO="
+IF /I "%~1" == "/ECHO" (
+	REM # the "/ECHO" parameter will be passed to all called scripts too
+	SET "ECHO=/ECHO"
+	REM # re-enable ECHO
+	ECHO ON
+	REM # remove the parameter
+	SHIFT
+)
+
+REM # logging commands:
+SET LOG="%HERE%\bin\log.bat" %ECHO%
+SET LOG_ECHO="%HERE%\bin\log_echo.bat" %ECHO%
+
+REM ====================================================================================================================
 
 REM # the largest number we can use before it becomes negative (equivilent to 2 GB in bytes)
 SET /A MAXINT=2*1024*1024*1024,MAXINT-=1

@@ -3,11 +3,30 @@
 REM # optimize_jpg.bat
 REM ====================================================================================================================
 REM # optimizes a single JPG file
+REM #
+REM #	%1 - filepath to a JPG / JPEG file
 
-REM # %1 - filepath to a JPG / JPEG file
-
+REM # init
 REM --------------------------------------------------------------------------------------------------------------------
-CALL :init
+REM # path of this script:
+REM # (must be done before using `SHIFT`)
+SET "HERE=%~dp0"
+IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
+
+REM # check for an echo parameter (enables ECHO)
+SET "ECHO="
+IF /I "%~1" == "/ECHO" (
+	REM # the "/ECHO" parameter will be passed to all called scripts too
+	SET "ECHO=/ECHO"
+	REM # re-enable ECHO
+	ECHO ON
+	REM # remove the parameter
+	SHIFT
+)
+
+REM # logging commands:
+SET LOG="%HERE%\bin\log.bat" %ECHO%
+SET LOG_ECHO="%HERE%\bin\log_echo.bat" %ECHO%
 
 REM # any parameter?
 REM --------------------------------------------------------------------------------------------------------------------
@@ -22,7 +41,7 @@ IF "%~1" == "" (
 	ECHO:
 	ECHO     Optimizes a JPG file without any reduction in quality.
 	ECHO:
-	GOTO:EOF
+	EXIT /B 0
 )
 
 REM # file missing?
@@ -62,8 +81,8 @@ CALL :display_status_left "%JPG_FILE%"
 REM # done this file before?
 REM --------------------------------------------------------------------------------------------------------------------
 REM # hashing commands:
-SET HASH_TRY="%HERE%\hash_check.bat" "jpg"
-SET HASH_ADD="%HERE%\hash_add.bat" "jpg"
+SET HASH_TRY="%HERE%\hash_check.bat" %ECHO% "jpg"
+SET HASH_ADD="%HERE%\hash_add.bat" %ECHO% "jpg"
 
 REM # check the file in the hash-cache
 CALL %HASH_TRY% "%JPG_FILE%"
@@ -96,17 +115,6 @@ EXIT /B 0
 REM # functions:
 REM ====================================================================================================================
 
-:init
-	REM # path of this script:
-	REM # (must be done before using `SHIFT`)
-	SET "HERE=%~dp0"
-	REM # always remove trailing slash
-	IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
-	REM # logging commands:
-	SET LOG="%HERE%\log.bat"
-	SET LOG_ECHO="%HERE%\log_echo.bat"
-	GOTO:EOF
-
 :filesize
 	REM # get a file size (in bytes):
 	REM # 	%1 = variable name to set
@@ -131,7 +139,6 @@ REM ============================================================================
 	SET "STATUS_LEFT=* %LINE_NAME% %LINE_OLD% "
 	REM # output the status line (without carriage-return)
 	<NUL (SET /P "STATUS_LEFT=%STATUS_LEFT%")
-	GOTO:EOF/P "$=%STATUS_LEFT%")
 	GOTO:EOF
 
 :display_status_right
@@ -149,7 +156,7 @@ REM ============================================================================
 		GOTO :display_status_right__echo
 	)
 	REM # calculate the perctange difference
-	CALL "%HERE%\get_percentage.bat" SAVED %SIZE_OLD% %SIZE_NEW%
+	CALL "%HERE%\get_percentage.bat" %ECHO% SAVED %SIZE_OLD% %SIZE_NEW%
 	SET "SAVED=   %SAVED%"
 	REM # increase or decrease in size?
 	IF %SIZE_NEW% GTR %SIZE_OLD% SET "SAVED=+%SAVED:~-3%"

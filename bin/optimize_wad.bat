@@ -4,14 +4,34 @@ REM # optimize_wad.bat
 REM ====================================================================================================================
 REM # optimizes a DOOM WAD file (which may contain embedded JPG, PNG and other WAD files)
 REM # this script recursively optimizes, so WADs within WADs will automatically be handled
-
-REM # %1 - filepath to a WAD file. for ".PK3" WADs use "optimize_pk3.bat" instead
+REM #
+REM # 	%1 - filepath to a WAD file. for ".PK3" WADs use "optimize_pk3.bat" instead
 
 REM # TODO : handle different lumps with the same name? (use the lump ids for positioning)
 REM # TODO : handle lump names that would be invalid file names, e.g. "*"
 
+REM # init
 REM --------------------------------------------------------------------------------------------------------------------
-CALL :init
+REM # path of this script:
+REM # (must be done before using `SHIFT`)
+SET "HERE=%~dp0"
+IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
+
+REM # check for an echo parameter (enables ECHO)
+SET "ECHO="
+IF /I "%~1" == "/ECHO" (
+	REM # the "/ECHO" parameter will be passed to all called scripts too
+	SET "ECHO=/ECHO"
+	REM # re-enable ECHO
+	ECHO ON
+	REM # remove the parameter
+	SHIFT
+)
+
+REM # logging commands:
+SET LOG="%HERE%\bin\log.bat" %ECHO%
+SET LOG_ECHO="%HERE%\bin\log_echo.bat" %ECHO%
+
 
 REM # default options
 SET "DO_PNG=1"
@@ -94,8 +114,8 @@ REM # location of the lumpmod executable
 SET BIN_LUMPMOD="%HERE%\lumpmod\lumpmod.exe"
 
 REM # our component scripts
-SET OPTIMIZE_PNG="%HERE%\optimize_png.bat"
-SET OPTIMIZE_JPG="%HERE%\optimize_jpg.bat"
+SET OPTIMIZE_PNG="%HERE%\optimize_png.bat" %ECHO%
+SET OPTIMIZE_JPG="%HERE%\optimize_jpg.bat" %ECHO%
 
 REM # display file name and current file size
 CALL :display_status_left "%WAD_FILE%"
@@ -103,8 +123,8 @@ CALL :display_status_left "%WAD_FILE%"
 REM # done this file before?
 REM --------------------------------------------------------------------------------------------------------------------
 REM # hashing commands:
-SET HASH_TRY="%HERE%\hash_check.bat" "wad"
-SET HASH_ADD="%HERE%\hash_add.bat" "wad"
+SET HASH_TRY="%HERE%\hash_check.bat" %ECHO% "wad"
+SET HASH_ADD="%HERE%\hash_add.bat" %ECHO% "wad"
 
 REM # check the file in the hash-cache
 CALL %HASH_TRY% "%WAD_FILE%"
@@ -360,17 +380,6 @@ EXIT /B %ERROR%
 REM # functions:
 REM ====================================================================================================================
 
-:init
-	REM # path of this script:
-	REM # (must be done before using `SHIFT`)
-	SET "HERE=%~dp0"
-	REM # always remove trailing slash
-	IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
-	REM # logging commands:
-	SET LOG="%HERE%\log.bat"
-	SET LOG_ECHO="%HERE%\log_echo.bat"
-	GOTO:EOF
-
 :any_ok
 	REM # only display the split line for a WAD if there any lumps that will be optimised in the WAD
 	REM ------------------------------------------------------------------------------------------------------------
@@ -422,7 +431,7 @@ REM ============================================================================
 		GOTO :display_status_right__echo
 	)
 	REM # calculate the perctange difference
-	CALL "%HERE%\get_percentage.bat" SAVED %SIZE_OLD% %SIZE_NEW%
+	CALL "%HERE%\get_percentage.bat" %ECHO% SAVED %SIZE_OLD% %SIZE_NEW%
 	SET "SAVED=   %SAVED%"
 	REM # increase or decrease in size?
 	IF %SIZE_NEW% GTR %SIZE_OLD% SET "SAVED=+%SAVED:~-3%"

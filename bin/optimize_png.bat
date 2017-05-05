@@ -3,11 +3,31 @@
 REM # optimize_png.bat
 REM ====================================================================================================================
 REM # optimizes a single PNG file
+REM #
+REM # 	%1 - filepath to a PNG file
 
-REM # %1 - filepath to a PNG file
-
+REM # init
 REM --------------------------------------------------------------------------------------------------------------------
-CALL :init
+REM # path of this script:
+REM # (must be done before using `SHIFT`)
+SET "HERE=%~dp0"
+IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
+
+REM # check for an echo parameter (enables ECHO)
+SET "ECHO="
+IF /I "%~1" == "/ECHO" (
+	REM # the "/ECHO" parameter will be passed to all called scripts too
+	SET "ECHO=/ECHO"
+	REM # re-enable ECHO
+	ECHO ON
+	REM # remove the parameter
+	SHIFT
+)
+
+REM # logging commands:
+SET LOG="%HERE%\bin\log.bat" %ECHO%
+SET LOG_ECHO="%HERE%\bin\log_echo.bat" %ECHO%
+
 
 REM # any parameter?
 REM --------------------------------------------------------------------------------------------------------------------
@@ -103,8 +123,8 @@ CALL :display_status_left "%PNG_FILE%"
 REM # done this file before?
 REM --------------------------------------------------------------------------------------------------------------------
 REM # hashing commands:
-SET HASH_TRY="%HERE%\hash_check.bat" "png"
-SET HASH_ADD="%HERE%\hash_add.bat" "png"
+SET HASH_TRY="%HERE%\hash_check.bat" %ECHO% "png"
+SET HASH_ADD="%HERE%\hash_add.bat" %ECHO% "png"
 
 REM # check the file in the hash-cache
 CALL %HASH_TRY% "%PNG_FILE%"
@@ -198,17 +218,6 @@ EXIT /B %ERROR%
 REM # functions:
 REM ====================================================================================================================
 
-:init
-	REM # path of this script:
-	REM # (must be done before using `SHIFT`)
-	SET "HERE=%~dp0"
-	REM # always remove trailing slash
-	IF "%HERE:~-1,1%" == "\" SET "HERE=%HERE:~0,-1%"
-	REM # logging commands:
-	SET LOG="%HERE%\log.bat"
-	SET LOG_ECHO="%HERE%\log_echo.bat"
-	GOTO:EOF
-
 :filesize
 	REM # get a file size, in bytes:
 	REM #
@@ -251,7 +260,7 @@ REM ============================================================================
 		GOTO :display_status_right__echo
 	)
 	REM # calculate the perctange difference
-	CALL "%HERE%\get_percentage.bat" SAVED %SIZE_OLD% %SIZE_NEW%
+	CALL "%HERE%\get_percentage.bat" %ECHO% SAVED %SIZE_OLD% %SIZE_NEW%
 	SET "SAVED=   %SAVED%"
 	REM # increase or decrease in size?
 	IF %SIZE_NEW% GTR %SIZE_OLD% SET "SAVED=+%SAVED:~-3%"
