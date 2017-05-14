@@ -29,8 +29,8 @@ IF /I "%~1" == "/ECHO" (
 )
 
 REM # logging commands:
-SET LOG="%HERE%\bin\log.bat" %ECHO%
-SET LOG_ECHO="%HERE%\bin\log_echo.bat" %ECHO%
+SET LOG="%HERE%\log.bat" %ECHO%
+SET LOG_ECHO="%HERE%\log_echo.bat" %ECHO%
 
 
 REM # default options
@@ -286,7 +286,7 @@ GOTO :wad__finish
 	REM # prevent the WAD file being cached if JPG files are being skipped
 	SET "ANY_JPG=1"
 	REM # is JPEG processing enabled?
-	IF %DO_JPG% EQU 0 GOTO :wad__lump_test
+	IF %DO_JPG% EQU 0 GOTO:EOF
 	
 	REM # display the split-line to indicate WAD contents
 	CALL :any_ok
@@ -449,17 +449,18 @@ REM ============================================================================
 	
 :display_status_msg
 	REM # append a message to the status line and also output it to the log whole:
+	REM #
 	REM # 	%1 = message
 	REM ------------------------------------------------------------------------------------------------------------
 	REM # allow the parameter string to include exclamation marks
 	SETLOCAL DISABLEDELAYEDEXPANSION
-	SET "ECHO=%~1"
+	SET "TEXT=%~1"
 	REM # now allow the parameter string to be displayed without trying to "execute" it
 	SETLOCAL ENABLEDELAYEDEXPANSION
 	REM # (note that the status line is displayed in two parts in the console, before and after file optimisation,
 	REM #  but needs to be output to the log file as a single line)
-	ECHO !ECHO!
-	CALL %LOG% "%STATUS_LEFT%!ECHO!"
+	ECHO !TEXT!
+	CALL %LOG% "%STATUS_LEFT%!TEXT!"
 	ENDLOCAL & GOTO:EOF
 	
 :format_filesize_bytes

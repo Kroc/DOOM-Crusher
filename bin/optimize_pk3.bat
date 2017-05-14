@@ -1,4 +1,4 @@
-@ECHO OFF & SETLOCAL ENABLEEXTENSIONS ENABLEDELAYEDEXPANSION
+@ECHO OFF & SETLOCAL ENABLEEXTENSIONS DISABLEDELAYEDEXPANSION
 
 REM # optimize_pk3.bat
 REM ====================================================================================================================
@@ -23,8 +23,8 @@ IF /I "%~1" == "/ECHO" (
 )
 
 REM # logging commands:
-SET LOG="%HERE%\bin\log.bat" %ECHO%
-SET LOG_ECHO="%HERE%\bin\log_echo.bat" %ECHO%
+SET LOG="%HERE%\log.bat" %ECHO%
+SET LOG_ECHO="%HERE%\log_echo.bat" %ECHO%
 
 
 :params
@@ -187,47 +187,49 @@ REM # temporary file used during repacking;
 REM # this must use a ZIP extension or 7ZIP borks
 SET "TEMP_FILE=%TEMP_DIR%\%~n1.zip"
 
+REM # is an outdated temporary file present?
+IF NOT EXIST "%TEMP_FILE%" GOTO :cleanup_dir
+
 REM # remove the zip file created when repacking -- we do not want to "update" this file
-IF EXIST "%TEMP_FILE%" (
-	REM # try remove the file
-	DEL /F "%TEMP_FILE%"  >NUL 2>&1
-	REM # if that failed:
-	IF !ERRORLEVEL! GEQ 1 (
-		CALL :display_status_msg "^! error <del>"
-		CALL %LOG_ECHO% "==============================================================================="
-		CALL %LOG_ECHO%
-		CALL %LOG_ECHO% "ERROR: Could not remove file:"
-		CALL %LOG_ECHO% "%TEMP_FILE%"
-		CALL %LOG_ECHO%
-		EXIT /B 1
-	)
+DEL /F "%TEMP_FILE%"  >NUL 2>&1
+REM # if that failed:
+IF %ERRORLEVEL% GEQ 1 (
+	CALL :display_status_msg "! error <del>"
+	CALL %LOG_ECHO% "==============================================================================="
+	CALL %LOG_ECHO%
+	CALL %LOG_ECHO% "ERROR: Could not remove file:"
+	CALL %LOG_ECHO% "%TEMP_FILE%"
+	CALL %LOG_ECHO%
+	EXIT /B 1
 )
 
 REM # remove the temporary directory where the PK3 was unpacked to
+:cleanup_dir
 IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
-IF EXIST "%TEMP_DIR%" (
-	REM # attempt a second time, this is intentional:
-	REM # http://stackoverflow.com/questions/22948189/batch-getting-the-directory-is-not-empty-on-rmdir-command
-	RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
-	REM # could not clean up?
-	IF ERRORLEVEL 1 (
-		CALL :display_status_msg "^! error <rmdir>"
-		CALL %LOG_ECHO% "==============================================================================="
-		CALL %LOG_ECHO%
-		CALL %LOG_ECHO% "ERROR: Could not remove directory:"
-		CALL %LOG_ECHO% "%TEMP_DIR%"
-		CALL %LOG_ECHO%
-		EXIT /B 1
-	)
+IF NOT EXIST "%TEMP_DIR%" GOTO :create_dir
+
+REM # attempt a second time, this is intentional:
+REM # http://stackoverflow.com/questions/22948189/batch-getting-the-directory-is-not-empty-on-rmdir-command
+RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
+REM # could not clean up?
+IF ERRORLEVEL 1 (
+	CALL :display_status_msg "! error <rmdir>"
+	CALL %LOG_ECHO% "==============================================================================="
+	CALL %LOG_ECHO%
+	CALL %LOG_ECHO% "ERROR: Could not remove directory:"
+	CALL %LOG_ECHO% "%TEMP_DIR%"
+	CALL %LOG_ECHO%
+	EXIT /B 1
 )
 
 REM # create the temporary directory
+:create_dir
 IF NOT EXIST "%TEMP_DIR%" (
 	REM # try create the directory
 	MKDIR "%TEMP_DIR%"  >NUL 2>&1
 	REM # failed?
 	IF ERRORLEVEL 1 (
-		CALL :display_status_msg "^! error <mkdir>"
+		CALL :display_status_msg "! error <mkdir>"
 		CALL %LOG_ECHO% "==============================================================================="
 		CALL %LOG_ECHO%
 		CALL %LOG_ECHO% "ERROR: Could not create directory:"
@@ -247,7 +249,7 @@ SET "STATUS_LEFT=%STATUS_LEFT%: unpacking... "
 
 IF ERRORLEVEL 1 (
 	REM # cap the status line
-	CALL :display_status_msg "err^!"
+	CALL :display_status_msg "err!"
 	CALL %LOG_ECHO% "==============================================================================="
 	
 	%BIN_7ZA% x -aos -o"%TEMP_DIR%" -tzip -- "%PK3_FILE%"
@@ -272,100 +274,10 @@ REM # find all optimizable files:
 REM # (you can't use variables in the `FOR /R` parameter)
 PUSHD "%TEMP_DIR%"
 
-FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.lmp;*.) DO (
-	REM # JPEG files:
-	IF /I "%%~xZ" == ".jpg" (
-		REM # if JPG optimisation is enabled, process the file
-		IF %DO_JPG% EQU 1 (
-			CALL %OPTIMIZE_JPG% "%%~fZ"
-			REM # if that errored we won't cache the PK3
-			SET "ERROR=!ERRORLEVEL!"
-		)
-		REM # mark the PK3 as containing at least one JPG file;
-		REM # this will prevent the PK3 file being cached if JPG files are being skipped
-		SET "ANY_JPG=1"
-	)
-	IF /I "%%~xZ" == ".jpeg" (
-		IF %DO_JPG% EQU 1 (
-			CALL %OPTIMIZE_JPG% "%%~fZ"
-			SET "ERROR=!ERRORLEVEL!"
-		)
-		SET "ANY_JPG=1"
-	)
-	REM # PNG files:
-	IF /I "%%~xZ" == ".png" (
-		REM # if PNG optimisation is enabled, process the file
-		IF %DO_PNG% EQU 1 (
-			CALL %OPTIMIZE_PNG% "%%~fZ"
-			REM # if that errored we won't cache the PK3
-			SET "ERROR=!ERRORLEVEL!"
-		)
-		REM # mark the PK3 as containing at least one PNG file;
-		REM # this will prevent the PK3 file being cached if JPG files are being skipped
-		SET "ANY_PNG=1"
-	)
-	REM # WAD files:
-	IF /I "%%~xZ" == ".wad" (
-		REM # if WAD optimisation is enabled, process the file
-		IF %DO_WAD% EQU 1 (
-			CALL %OPTIMIZE_WAD% "%%~fZ"
-			REM # if that errored we won't cache the PK3
-			SET "ERROR=!ERRORLEVEL!"
-		)
-		REM # mark the PK3 as containing at least one WAD file;
-		REM # this will prevent the PK3 file being cached if WAD files are being skipped
-		SET "ANY_WAD=1"
-	)
-	REM # files with "lmp" exetension or no extension at all
-	REM # must be examined to determine their type
-	SET "IS_LUMP=0"
-	IF /I "%%~xZ" == ".lmp" SET "IS_LUMP=1"
-	IF "%%~xZ" == "" SET "IS_LUMP=1"
-	IF "!IS_LUMP!" == "1" (
-		REM # READ the first 1021 bytes of the lump.
-		REM # a truly brilliant solution, thanks to:
-		REM # http://stackoverflow.com/a/7827243
-		SET "HEADER=" & SET /P HEADER=< "%%~fZ"
-		
-		REM # a JPEG file?
-		REM # IMPORTANT: these bytes are "0xFF,0xD8"
-		IF "!HEADER:~0,2!" == "ÿØ" (
-			REM # if JPG optimisation is enabled, process the file
-			IF %DO_JPG% EQU 1 (
-				CALL %OPTIMIZE_JPG% "%%~fZ"
-				REM # if that errored we won't cache the PK3
-				SET "ERROR=!ERRORLEVEL!"
-			)
-			REM # mark the PK3 as containing at least one JPG file;
-			REM # this will prevent the PK3 file being cached if JPG files are being skipped
-			SET "ANY_JPG=1"
-		)
-		REM # a PNG file?
-		IF "!HEADER:~1,3!" == "PNG" (
-			REM # if PNG optimisation is enabled, process the file
-			IF %DO_PNG% EQU 1 (
-				CALL %OPTIMIZE_PNG% "%%~fZ"
-				REM # if that errored we won't cache the PK3
-				SET "ERROR=!ERRORLEVEL!"
-			)
-			REM # mark the PK3 as containing at least one PNG file;
-			REM # this will prevent the PK3 file being cached if PNG files are being skipped
-			SET "ANY_PNG=1"
-		)
-		REM # a WAD file?
-		IF "!HEADER:~1,3!" == "WAD" (
-			REM # if WAD optimisation is enabled, process the file
-			IF %DO_WAD% EQU 1 (
-				CALL %OPTIMIZE_WAD% "%%~fZ"
-				REM # if that errored we won't cache the PK3
-				SET "ERROR=!ERRORLEVEL!"
-			)
-			REM # mark the PK3 as containing at least one WAD file;
-			REM # this will prevent the PK3 file being cached if WAD files are being skipped
-			SET "ANY_WAD=1"
-		)
-	)
-)
+REM # scan the directory given for crushable files
+REM # note that "*." is a special term to select all files *without* an extension
+FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.lmp;*.) DO CALL :process_file "%%~fZ"
+
 REM # finished with the PK3 file contents
 CALL %LOG_ECHO% "  ============================================================================="
 POPD
@@ -406,7 +318,7 @@ CALL :display_status_left "%PK3_FILE%"
 REM # replace the original PK3 file with the new one
 COPY /Y "%TEMP_FILE%" "%PK3_FILE%"  >NUL 2>&1
 IF ERRORLEVEL 1 (
-	CALL :display_status_msg "^! error <copy>"
+	CALL :display_status_msg "! error <copy>"
 	CALL %LOG_ECHO%
 	CALL %LOG_ECHO% "ERROR: Could not replace the original PK3 with the new version."
 	CALL %LOG_ECHO%
@@ -417,16 +329,17 @@ IF ERRORLEVEL 1 (
 REM # deflopt the PK3:
 REM --------------------------------------------------------------------------------------------------------------------
 REM # no need to deflopt the PK3 if it's uncompressed!
-IF %ZSTORE% EQU 0 (
-	REM # deflopt location
-	SET "BIN_DEFLOPT=%HERE%\deflopt\DeflOpt.exe"
-	REM # running deflopt can shave a few more bytes off of any DEFLATE-based content
-	"%BIN_DEFLOPT%" /a "%PK3_FILE%"  >NUL 2>&1
-	REM # if that errored we won't cache the PK3
-	SET "ERROR=!ERRORLEVEL!"
-)
+IF %ZSTORE% EQU 1 GOTO :finish
+
+REM # deflopt location
+SET "BIN_DEFLOPT=%HERE%\deflopt\DeflOpt.exe"
+REM # running deflopt can shave a few more bytes off of any DEFLATE-based content
+"%BIN_DEFLOPT%" /a "%PK3_FILE%"  >NUL 2>&1
+REM # if that errored we won't cache the PK3
+SET "ERROR=%ERRORLEVEL%"
 
 REM # cap the status line with the new file size
+:finish
 CALL :display_status_right "%PK3_FILE%"
 
 REM # add the file to the hash-cache?
@@ -456,7 +369,7 @@ IF EXIST "%TEMP_DIR%" (
 	RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
 	REM # could not clean up?
 	IF ERRORLEVEL 1 (
-		CALL %LOG_ECHO% "^! error <rmdir>"
+		CALL %LOG_ECHO% "! error <rmdir>"
 		CALL %LOG_ECHO% "==============================================================================="
 		CALL %LOG_ECHO%
 		CALL %LOG_ECHO% "ERROR: Could not remove directory:"
@@ -472,6 +385,80 @@ EXIT /B %ERROR%
 
 REM functions:
 REM ====================================================================================================================
+
+:process_file
+	REM # determine the file type of a file and process it accordingly
+	REM #
+	REM #	%1 = full path of file to process
+	
+	REM # which file type?
+	IF /I "%~x1" == ".jpg"  GOTO :process_jpg
+	IF /I "%~x1" == ".jpeg" GOTO :process_jpg
+	IF /I "%~x1" == ".png"  GOTO :process_png
+	IF /I "%~x1" == ".wad"  GOTO :process_wad
+	
+	REM # files with "lmp" exetension or no extension at all
+	REM # must be examined to determine their type
+	SET "IS_LUMP=0"
+	IF /I "%~x1" == ".lmp" SET "IS_LUMP=1"
+	IF    "%~x1" == ""     SET "IS_LUMP=1"
+	REM # if not a lump file, skip the file
+	IF "%IS_LUMP%" == "0" GOTO:EOF
+
+	REM # READ the first 1021 bytes of a file. a truly brilliant solution, thanks to:
+	REM # http://stackoverflow.com/a/7827243
+	SET "HEADER=" & SET /P HEADER=< "%~1"
+	
+	REM # sometimes these bytes can glitch the parser,
+	REM # so we delay their insertion until runtime
+	SETLOCAL ENABLEDELAYEDEXPANSION
+	REM # a JPEG file?
+	REM # IMPORTANT: these bytes are "0xFF,0xD8"
+	IF "!HEADER:~0,2!" == "ÿØ"  ENDLOCAL & GOTO :process_jpg
+	REM # a PNG file?
+	IF "!HEADER:~1,3!" == "PNG" ENDLOCAL & GOTO :process_png
+	REM # a WAD file?
+	IF "!HEADER:~1,3!" == "WAD" ENDLOCAL & GOTO :process_wad
+	
+	GOTO:EOF
+	
+	:process_jpg
+	REM # mark the PK3 as containing at least one JPG file; this will
+	REM # prevent the PK3 file being cached if JPG files are being skipped
+	SET "ANY_JPG=1"
+	REM # if JPG optimisation is disabled, skip the file
+	IF %DO_JPG% EQU 0 GOTO:EOF
+	REM # go do the optimisation
+	CALL %OPTIMIZE_JPG% "%~1"
+	REM # if that errored we won't cache the PK3
+	SET "ERROR=%ERRORLEVEL%"
+	GOTO:EOF
+	
+	REM # PNG files:
+	:process_png
+	REM # mark the PK3 as containing at least one PNG file; this will
+	REM # prevent the PK3 file being cached if JPG files are being skipped
+	SET "ANY_PNG=1"
+	REM # if PNG optimisation is disabled, skip the file
+	IF %DO_PNG% EQU 0 GOTO:EOF
+	REM # go do the optimisation
+	CALL %OPTIMIZE_PNG% "%~1"
+	REM # if that errored we won't cache the PK3
+	SET "ERROR=%ERRORLEVEL%"
+	GOTO:EOF
+	
+	REM # WAD files:
+	:process_wad
+	REM # mark the PK3 as containing at least one WAD file; this will
+	REM # prevent the PK3 file being cached if WAD files are being skipped
+	SET "ANY_WAD=1"
+	REM # if WAD optimisation is disabled, skip the file
+	IF %DO_WAD% EQU 0 GOTO:EOF
+	REM # go do the optimisation
+	CALL %OPTIMIZE_WAD% "%~1"
+	REM # if that errored we won't cache the PK3
+	SET "ERROR=%ERRORLEVEL%"
+	GOTO:EOF
 
 :filesize
 	REM # get a file size, in bytes:
@@ -538,13 +525,13 @@ REM ============================================================================
 	REM ------------------------------------------------------------------------------------------------------------
 	REM # allow the parameter string to include exclamation marks
 	SETLOCAL DISABLEDELAYEDEXPANSION
-	SET "ECHO=%~1"
+	SET "TEXT=%~1"
 	REM # now allow the parameter string to be displayed without trying to "execute" it
 	SETLOCAL ENABLEDELAYEDEXPANSION
 	REM # (note that the status line is displayed in two parts in the console, before and after file optimisation,
 	REM #  but needs to be output to the log file as a single line)
-	ECHO !ECHO!
-	CALL %LOG% "%STATUS_LEFT%!ECHO!"
+	ECHO !TEXT!
+	CALL %LOG% "%STATUS_LEFT%!TEXT!"
 	ENDLOCAL & GOTO:EOF
 	
 :format_filesize_bytes

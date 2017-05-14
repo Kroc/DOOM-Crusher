@@ -25,8 +25,8 @@ IF /I "%~1" == "/ECHO" (
 )
 
 REM # logging commands:
-SET LOG="%HERE%\bin\log.bat" %ECHO%
-SET LOG_ECHO="%HERE%\bin\log_echo.bat" %ECHO%
+SET LOG="%HERE%\log.bat" %ECHO%
+SET LOG_ECHO="%HERE%\log_echo.bat" %ECHO%
 
 
 REM # any parameter?
@@ -283,13 +283,13 @@ REM ============================================================================
 	REM ------------------------------------------------------------------------------------------------------------
 	REM # allow the parameter string to include exclamation marks
 	SETLOCAL DISABLEDELAYEDEXPANSION
-	SET "ECHO=%~1"
+	SET "TEXT=%~1"
 	REM # now allow the parameter string to be displayed without trying to "execute" it
 	SETLOCAL ENABLEDELAYEDEXPANSION
 	REM # (note that the status line is displayed in two parts in the console, before and after file optimisation,
 	REM #  but needs to be output to the log file as a single line)
-	ECHO !ECHO!
-	CALL %LOG% "%STATUS_LEFT%!ECHO!"
+	ECHO !TEXT!
+	CALL %LOG% "%STATUS_LEFT%!TEXT!"
 	ENDLOCAL & GOTO:EOF
 	
 :format_filesize_bytes

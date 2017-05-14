@@ -202,22 +202,13 @@ REM ============================================================================
 	REM # determine the file type of a file and process it accordingly
 	REM #
 	REM #	%1 = full path of file to process
-
-	REM # optimize known file types:
-	IF %DO_JPG% EQU 1 (
-		IF /I "%~x1" == ".JPG"  CALL %OPTIMIZE_JPG% "%~1"
-		IF /I "%~x1" == ".JPEG" CALL %OPTIMIZE_JPG% "%~1"
-	)
-	IF %DO_PNG% EQU 1 (
-		IF /I "%~x1" == ".PNG"  CALL %OPTIMIZE_PNG% "%~1"
-	)
-	IF %DO_WAD% EQU 1 (
-		IF /I "%~x1" == ".WAD"  CALL %OPTIMIZE_WAD% "%~1"
-	)
-	IF %DO_PK3% EQU 1 (
-		IF /I "%~x1" == ".PK3"  CALL %OPTIMIZE_PK3% "%~1"
-	)
-
+	
+	REM # which file type?
+	IF /I "%~x1" == ".jpg"  GOTO :process_jpg
+	IF /I "%~x1" == ".jpeg" GOTO :process_jpg
+	IF /I "%~x1" == ".png"  GOTO :process_png
+	IF /I "%~x1" == ".wad"  GOTO :process_wad
+	
 	REM # files with "lmp" exetension or no extension at all
 	REM # must be examined to determine their type
 	SET "IS_LUMP=0"
@@ -230,18 +221,32 @@ REM ============================================================================
 	REM # http://stackoverflow.com/a/7827243
 	SET "HEADER=" & SET /P HEADER=< "%~1"
 	
+	REM # sometimes these bytes can glitch the parser,
+	REM # so we delay their insertion until runtime
+	SETLOCAL ENABLEDELAYEDEXPANSION
 	REM # a JPEG file?
-	IF %DO_JPG% EQU 1 (
-		IF "%HEADER:~0,2%" == "ÿØ"  CALL %OPTIMIZE_JPG% "%~1"
-	)
+	REM # IMPORTANT: these bytes are "0xFF,0xD8"
+	IF "!HEADER:~0,2!" == "ÿØ"  ENDLOCAL & GOTO :process_jpg
 	REM # a PNG file?
-	IF %DO_PNG% EQU 1 (
-		IF "%HEADER:~1,3%" == "PNG" CALL %OPTIMIZE_PNG% "%~1"
-	)
+	IF "!HEADER:~1,3!" == "PNG" ENDLOCAL & GOTO :process_png
 	REM # a WAD file?
-	IF %DO_WAD% EQU 1 (
-		IF "%HEADER:~1,3%" == "WAD" CALL %OPTIMIZE_WAD% "%~1"
-	)
-
-	REM # file processed
+	IF "!HEADER:~1,3!" == "WAD" ENDLOCAL & GOTO :process_wad
+	
+	GOTO:EOF
+	
+	:process_jpg
+	REM # if JPG optimisation is enabled, process the file
+	IF %DO_JPG% EQU 1 CALL %OPTIMIZE_JPG% "%~1"
+	GOTO:EOF
+	
+	REM # PNG files:
+	:process_png
+	REM # if PNG optimisation is enabled, process the file
+	IF %DO_PNG% EQU 1 CALL %OPTIMIZE_PNG% "%~1"
+	GOTO:EOF
+	
+	REM # WAD files:
+	:process_wad
+	REM # if WAD optimisation is enabled, process the file
+	IF %DO_WAD% EQU 1 CALL %OPTIMIZE_WAD% "%~1"
 	GOTO:EOF

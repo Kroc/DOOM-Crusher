@@ -30,8 +30,8 @@ IF /I "%~1" == "/ECHO" (
 )
 
 REM # logging commands:
-SET LOG="%HERE%\bin\log.bat" %ECHO%
-SET LOG_ECHO="%HERE%\bin\log_echo.bat" %ECHO%
+SET LOG="%HERE%\log.bat" %ECHO%
+SET LOG_ECHO="%HERE%\log_echo.bat" %ECHO%
 
 REM ====================================================================================================================
 
