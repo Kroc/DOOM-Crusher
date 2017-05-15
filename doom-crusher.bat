@@ -208,6 +208,7 @@ REM ============================================================================
 	IF /I "%~x1" == ".jpeg" GOTO :process_jpg
 	IF /I "%~x1" == ".png"  GOTO :process_png
 	IF /I "%~x1" == ".wad"  GOTO :process_wad
+	IF /I "%~x1" == ".pk3"  GOTO :process_pk3
 	
 	REM # files with "lmp" exetension or no extension at all
 	REM # must be examined to determine their type
@@ -249,4 +250,10 @@ REM ============================================================================
 	:process_wad
 	REM # if WAD optimisation is enabled, process the file
 	IF %DO_WAD% EQU 1 CALL %OPTIMIZE_WAD% "%~1"
+	GOTO:EOF
+	
+	REM # PK3 files:
+	:process_pk3
+	REM # if WAD optimisation is enabled, process the file
+	IF %DO_PK3% EQU 1 CALL %OPTIMIZE_PK3% "%~1"
 	GOTO:EOF
