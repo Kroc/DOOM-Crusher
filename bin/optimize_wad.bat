@@ -205,111 +205,19 @@ IF ERRORLEVEL 1 (
 )
 
 :wad
-REM # examine the WAD contents for optimizable files (PNG/JPG/WAD)
+REM # examine the WAD contents for optimizable files (PNG/JPG)
 REM ====================================================================================================================
 REM # we'll avoid displaying the split-line if the WAD doesn't contain any lumps we can optimise
 SET "ANY=0"
 
-REM # list the WAD contents and get the name and length of each lump,
-REM # lumpmod.exe has been modified to also provide the filetype, with thanks to _mental_
-REM # TODO: need to set `eol` to something not present in LUMP names
-REM # (use of quotes in a FOR command here is fraught with complications:
-REM #  http://stackoverflow.com/questions/22636308)
-FOR /F "tokens=1-4" %%A IN ('^" "%BIN_LUMPMOD%" "%TEMP_FILE%" list -v "^"') DO CALL :wad__lump "%%A" "%%B" "%%C" "%%D"
-REM # skip over the lump processing loop
-GOTO :wad__finish
+REM # list the WAD contents and get the name and length of each lump:
+REM # (lumpmod.exe has been modified to also provide the filetype, with thanks to _mental_)
+REM # NB: use of quotes in a FOR command here is fraught with complications:
+REM #     http://stackoverflow.com/questions/22636308
+FOR /F "tokens=1-4 eol=" %%A IN ('^" "%BIN_LUMPMOD%" "%TEMP_FILE%" list -v "^"') DO (
+	CALL :process_lump "%%A" "%%B" "%%C" "%%D"
+)
 
-:wad__lump
-	REM # %1 = lump ID
-	REM # %2 = lump name
-	REM # %3 = lump size
-	REM # %4 = lump type (PNG, JPG or LMP)
-	
-	REM # lumps of length 0 are just markers and can be skipped
-	IF "%~3" == "0" GOTO:EOF
-	REM # only process JPG or PNG lumps
-	IF "%~4" == "LMP" GOTO:EOF
-	
-	REM # ensure the lump name can be written to disk
-	REM # (may contain invalid file-system characters)
-	REM # TODO : handle astrisk, very difficult to do properly
-	SET "LUMP=%~2"
-	SET "LUMP=%LUMP:<=_%"
-	SET "LUMP=%LUMP:>=_%"
-	SET "LUMP=%LUMP::=_%"
-	SET 'LUMP=%LUMP:"=_%'
-	SET "LUMP=%LUMP:/=_%"
-	SET "LUMP=%LUMP:\=_%"
-	SET "LUMP=%LUMP:|=_%"
-	SET "LUMP=%LUMP:?=_%"
-	SET "LUMP=%LUMP:!=_%"
-	SET "LUMP=%LUMP:&=_%"
-	REM # this is where the lump will go
-	SET "LUMP=%TEMP_DIR%\%LUMP%.%~4"
-	
-	REM # extract the lump to disk to optimize it
-	%BIN_LUMPMOD% "%TEMP_FILE%" extract %~2 "%LUMP%" >NUL 2>&1
-	REM # only continue if this succeeded
-	IF %ERRORLEVEL% GTR 0 (
-		REM # do not allow the WAD file to be cached,
-		REM # or any parent PK3 file
-		SET "ERROR=1"
-		REM # TODO: display the file status line to show a lumpmod error
-		GOTO:EOF
-	)
-	
-	REM # PNG files:
-	:wad__lump_png
-	REM # if not a PNG, skip ahead
-	IF NOT "%~4" == "PNG" GOTO :wad__lump_jpg
-	
-	REM # mark the WAD as containing at least one PNG file; this will
-	REM # prevent the WAD file being cached if PNG files are being skipped
-	SET "ANY_PNG=1"
-	REM # is PNG processing enabled?
-	IF %DO_PNG% EQU 0 GOTO :wad__lump_jpg
-	
-	REM # display the split-line to indicate WAD contents
-	CALL :any_ok
-	CALL %OPTIMIZE_PNG% "%LUMP%"
-	REM # if that errored we won't cache the WAD
-	SET "ERROR=%ERRORLEVEL%"
-	REM # was a PNG, skip JPG handling
-	GOTO :wad__lump_test
-	
-	REM # JPG files:
-	:wad__lump_jpg
-	REM # if not a JPG... well that should be impossible
-	IF NOT "%~4" == "JPG" GOTO:EOF
-	
-	REM # mark the WAD as containing at least one JPG file; this will
-	REM # prevent the WAD file being cached if JPG files are being skipped
-	SET "ANY_JPG=1"
-	REM # is JPEG processing enabled?
-	IF %DO_JPG% EQU 0 GOTO:EOF
-	
-	REM # display the split-line to indicate WAD contents
-	CALL :any_ok
-	CALL %OPTIMIZE_JPG% "%LUMP%"
-	REM # if that errored we won't cache the WAD
-	SET "ERROR=%ERRORLEVEL%"
-	
-	:wad__lump_test
-	REM # was the lump omptimized?
-	REM # (the orginal lump size is already in `%~3`)
-	CALL :filesize LUMP_SIZE "%LUMP%"
-	REM # compare sizes
-	IF %LUMP_SIZE% GEQ %~3 GOTO:EOF
-	
-	REM # put the lump back into the WAD
-	%BIN_LUMPMOD% "%TEMP_FILE%" update "%~2" "%LUMP%" >NUL 2>&1
-	REM # if that errored we won't cache the WAD
-	IF %ERRORLEVEL% NEQ 0 SET "ERROR=1"
-	
-	REM # TODO: display the file status line to show a lumpmod error?
-	GOTO:EOF
-
-:wad__finish
 REM # restore the previous working directory
 POPD
 
@@ -380,6 +288,110 @@ EXIT /B %ERROR%
 REM # functions:
 REM ====================================================================================================================
 
+:process_lump
+	REM # optimize a WAD lump
+	REM #
+	REM #	%1 = lump ID
+	REM #	%2 = lump name
+	REM #	%3 = lump size
+	REM #	%4 = lump type ("PNG", "JPG" or "LMP")
+	
+	REM # lumps of length 0 are just markers and can be skipped
+	IF "%~3" == "0" GOTO :lump_skip
+	REM # only process JPG or PNG lumps
+	IF "%~4" == "LMP" GOTO :lump_skip
+	
+	IF "%DOT%" == "" SET "DOT=0"
+	IF %DOT% GTR 0 ECHO:
+	SET "DOT=0"
+	
+	REM # ensure the lump name can be written to disk
+	REM # (may contain invalid file-system characters)
+	REM # TODO : handle astrisk, very difficult to do properly
+	SET "LUMP=%~2"
+	SET "LUMP=%LUMP:<=_%"
+	SET "LUMP=%LUMP:>=_%"
+	SET "LUMP=%LUMP::=_%"
+	SET 'LUMP=%LUMP:"=_%'
+	SET "LUMP=%LUMP:/=_%"
+	SET "LUMP=%LUMP:\=_%"
+	SET "LUMP=%LUMP:|=_%"
+	SET "LUMP=%LUMP:?=_%"
+	SET "LUMP=%LUMP:!=_%"
+	SET "LUMP=%LUMP:&=_%"
+	REM # this is where the lump will go
+	SET "LUMP=%TEMP_DIR%\%LUMP%.%~4"
+	
+	REM # extract the lump to disk to optimize it
+	%BIN_LUMPMOD% "%TEMP_FILE%" extract %~2 "%LUMP%" >NUL 2>&1
+	REM # only continue if this succeeded
+	IF %ERRORLEVEL% GTR 0 (
+		REM # do not allow the WAD file to be cached,
+		REM # or any parent PK3 file
+		SET "ERROR=1"
+		REM # TODO: display the file status line to show a lumpmod error
+		GOTO:EOF
+	)
+	
+	REM # PNG files:
+	:lump_png
+	REM # if not a PNG, skip ahead
+	IF NOT "%~4" == "PNG" GOTO :lump_jpg
+	
+	REM # mark the WAD as containing at least one PNG file; this will
+	REM # prevent the WAD file being cached if PNG files are being skipped
+	SET "ANY_PNG=1"
+	REM # is PNG processing enabled?
+	IF %DO_PNG% EQU 0 GOTO :lump_jpg
+	
+	REM # display the split-line to indicate WAD contents
+	CALL :any_ok
+	CALL %OPTIMIZE_PNG% "%LUMP%"
+	REM # if that errored we won't cache the WAD
+	SET "ERROR=%ERRORLEVEL%"
+	REM # was a PNG, skip JPG handling
+	GOTO :lump_test
+	
+	REM # JPG files:
+	:lump_jpg
+	REM # if not a JPG... well that should be impossible
+	IF NOT "%~4" == "JPG" GOTO:EOF
+	
+	REM # mark the WAD as containing at least one JPG file; this will
+	REM # prevent the WAD file being cached if JPG files are being skipped
+	SET "ANY_JPG=1"
+	REM # is JPEG processing enabled?
+	IF %DO_JPG% EQU 0 GOTO:EOF
+	
+	REM # display the split-line to indicate WAD contents
+	CALL :any_ok
+	CALL %OPTIMIZE_JPG% "%LUMP%"
+	REM # if that errored we won't cache the WAD
+	SET "ERROR=%ERRORLEVEL%"
+	
+	:lump_test
+	REM # was the lump omptimized?
+	REM # (the orginal lump size is already in `%~3`)
+	CALL :filesize LUMP_SIZE "%LUMP%"
+	REM # compare sizes
+	IF %LUMP_SIZE% GEQ %~3 GOTO:EOF
+	
+	REM # put the lump back into the WAD
+	%BIN_LUMPMOD% "%TEMP_FILE%" update "%~2" "%LUMP%" >NUL 2>&1
+	REM # if that errored we won't cache the WAD
+	IF %ERRORLEVEL% NEQ 0 SET "ERROR=1"
+	
+	REM # TODO: display the file status line to show a lumpmod error?
+	GOTO:EOF
+	
+	:lump_skip
+	REM # the lump can't/won't be optimized, show a dot on screen to demonstrate progress:
+	REM # if the split line hasn't been shown yet, do so now
+	IF %ANY% EQU 0 CALL :any_ok
+	REM # display a dot (and manage line-wrapping)
+	CALL :dot
+	GOTO:EOF
+	
 :any_ok
 	REM # only display the split line for a WAD if there any lumps that will be optimised in the WAD
 	REM ------------------------------------------------------------------------------------------------------------
@@ -390,6 +402,22 @@ REM ============================================================================
 	)
 	GOTO:EOF
 
+:dot
+	REM # display a dot on screen to indicate progress; these are batched together into lines
+	REM ------------------------------------------------------------------------------------------------------------
+	REM # increase current dot count
+	SET /A DOT=DOT+1
+	REM # line wrap?
+	IF %DOT% EQU 78 SET "DOT=1" & ECHO:
+	REM # new line?
+	IF %DOT% EQU 1 (
+		<NUL (SET /P "$=- .")
+	) ELSE (
+		REM # display dot, without moving to the next line
+		<NUL (SET /P "$=.")
+	)
+	GOTO:EOF
+	
 :filesize
 	REM # get a file size (in bytes):
 	REM # 	%1 = variable name to set
