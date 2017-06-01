@@ -149,11 +149,13 @@ REM # select 7Zip executable
 IF "%WINBIT%" == "64" SET BIN_7ZA="%BIN%\7za\7za_x64.exe"
 IF "%WINBIT%" == "32" SET BIN_7ZA="%BIN%\7za\7za.exe"
 
+REM # jpegtran:
+SET "BIN_JPEG=%BIN%\jpegtran\jpegtran.exe"
+
 REM # our component scripts:
 SET OPTIMIZE_PK3="%BIN%\optimize_pk3.bat"
 SET OPTIMIZE_WAD="%BIN%\optimize_wad.bat"
 SET OPTIMIZE_PNG="%BIN%\optimize_png.bat"
-SET OPTIMIZE_JPG="%BIN%\optimize_jpg.bat"
 
 
 REM # process parameter list:
@@ -233,7 +235,7 @@ EXIT /B 0
 	REM # skip file is JPG optimization is disabled
 	IF %DO_JPG% EQU 0 GOTO :param_skip
 	IF %DOT% GTR 0 ECHO: & SET "DOT=0"
-	CALL %OPTIMIZE_JPG% "%~f1"
+	CALL :optimize_jpg "%~f1"
 	GOTO:EOF
 	
 	REM # PNG files:
@@ -314,15 +316,9 @@ EXIT /B 0
 	REM # returns ERRORLEVEL 0 if the file is in the cache,
 	REM # ERRORLEVEL 1 for any other reason
 	REM ------------------------------------------------------------------------------------------------------------
-	REM # the different file-types are separated into different hash buckets.
-	REM # this is to avoid unecessary slow-down from large buckets (png) affecting smaller ones (jpg)
-	CALL :get_filetype "%~f1"
-	REM # pick the filename for the hash-cache
-	SET "HASHFILE=%CACHEDIR%\hashes_%TYPE%.txt"
-	REM # when the /ZSTORE option is enabled, PK3 files use a different hash file
-	IF %ZSTORE% EQU 1 (
-		IF "%TYPE%" == "pk3" SET "HASHFILE=%CACHEDIR%\hashes_pk3_zstore.txt"
-	)
+	REM # get the path for the hash-cache file
+	CALL :hash_name "%~f1"
+	
 	REM # (use of quotes in a FOR command here is fraught with complications:
 	REM #  http://stackoverflow.com/questions/22636308)
 	FOR /F "eol=* tokens=* delims=" %%A IN ('^" %BIN_HASH% -s -m %HASHFILE% -b "%~f1" ^"') DO (
@@ -330,29 +326,82 @@ EXIT /B 0
 	)
 	EXIT /B 1
 
+:hash_add
+	REM # add a file to the hash-cache
+	REM #
+	REM #	%1 = file-path
+	REM ------------------------------------------------------------------------------------------------------------
+	REM # get the path for the hash-cache file
+	CALL :hash_name "%~f1"
+	
+	REM # hash the file:
+	REM # the output of the command is full of problems that make it difficult to parse in Batch,
+	REM # from padding-spaces to multiple space gaps between columns, we need to normalise it first
+
+	REM # sha256deep:
+	REM # 	-s	: silent, don't include non-hash text in the output
+	REM # 	-q	: no filename
+	REM # use of quotes in a FOR command here is fraught with complications:
+	REM # http://stackoverflow.com/questions/22636308
+	FOR /F "eol=* delims=" %%A IN ('^" %BIN_HASH% -s -q "%~f1" ^"') DO @SET "HASH=%%A"
+	REM # compact multiple spaces into a single colon
+	SET "HASH=%HASH:  =:%"
+	SET "HASH=%HASH:::=:%"
+	SET "HASH=%HASH:::=:%"
+	REM # now split the columns
+	FOR /F "eol=* tokens=1-2 delims=:" %%A IN ("%HASH%") DO (
+		REM # write the hash to the hash-cache
+		ECHO %%A  %~nx1>>%HASHFILE%
+	)
+	GOTO:EOF
+
+:hash_name
+	REM # gets the file-path to the hash-cache to use for the given file
+	REM #
+	REM #	%1 = file-path to file that will be hashed
+	REM #
+	REM # sets `%HASHFILE%` with full path to the hash-cache file to use
+	REM ------------------------------------------------------------------------------------------------------------
+	REM # the different file-types are separated into different hash buckets.
+	REM # this is to avoid unecessary slow-down from large buckets (png) affecting smaller ones (jpg)
+	CALL :get_filetype "%~f1"
+	
+	REM # pick the filename for the hash-cache
+	SET "HASHFILE=%CACHEDIR%\hashes_%TYPE%.txt"
+	REM # when the /ZSTORE option is enabled, PK3 files use a different hash file
+	IF %ZSTORE% EQU 1 (
+		IF "%TYPE%" == "pk3" SET "HASHFILE=%CACHEDIR%\hashes_pk3_zstore.txt"
+	)
+	GOTO:EOF
+	
+	
+REM ====================================================================================================================
+
 :optimize_jpg
-	REM ============================================================================================================
+	REM # display file name and current file size
+	CALL :display_status_left "%~f1"
 	
 	REM # jpegtran:
 	REM #	-optimize	: optimize without quality loss
 	REM # 	-copy none	: don't keep any metadata
-	REM "%BIN_JPEG%" -optimize -copy none "%~f1" "%~f1"  >NUL 2>&1
-	REM IF ERRORLEVEL 1 (
-		REM REM # cap the status line
-		REM CALL :display_status_msg "! error <jpegtran>"
-		REM REM # if JPG optimisation failed return an error state; if the JPG was from a WAD or PK3 then these
-		REM REM # will *not* be cached so that they will always be retried in the future until there are no errors
-		REM REM # (we do not want to write off a WAD or PK3 as "done" when there are potential savings remaining)
-		REM EXIT /B 1
-	REM ) ELSE (
-		REM REM # add the file to the hash-cache
-		REM CALL :hash_add "%~f1"
-		REM REM # cap status line with the new file size
-		REM CALL :display_status_right "%~f1"
-	REM )
-	REM GOTO:EOF
+	"%BIN_JPEG%" -optimize -copy none "%~f1" "%~f1"  >NUL 2>&1
+	IF ERRORLEVEL 1 (
+		REM # cap the status line
+		CALL :display_status_msg "! error <jpegtran>"
+		REM # if JPG optimisation failed return an error state; if the JPG was from a WAD or PK3 then these
+		REM # will *not* be cached so that they will always be retried in the future until there are no errors
+		REM # (we do not want to write off a WAD or PK3 as "done" when there are potential savings remaining)
+		EXIT /B 1
+	) ELSE (
+		REM # add the file to the hash-cache
+		CALL :hash_add "%~f1"
+		REM # cap status line with the new file size
+		CALL :display_status_right "%~f1"
+	)
+	GOTO:EOF
 
 
+REM # common functions
 REM ====================================================================================================================
 :log
 	REM # write message to log-file only
