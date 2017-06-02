@@ -150,12 +150,20 @@ IF "%WINBIT%" == "64" SET BIN_7ZA="%BIN%\7za\7za_x64.exe"
 IF "%WINBIT%" == "32" SET BIN_7ZA="%BIN%\7za\7za.exe"
 
 REM # jpegtran:
-SET "BIN_JPEG=%BIN%\jpegtran\jpegtran.exe"
+SET BIN_JPEG="%BIN%\jpegtran\jpegtran.exe"
+REM # optipng:
+SET BIN_OPTIPNG="%BIN%\optipng\optipng.exe"
+REM # pngout:
+SET BIN_PNGOUT="%BIN%\pngout\pngout.exe"
+REM # pngcrush:
+IF "%WINBIT%" == "64" SET BIN_PNGCRUSH="%BIN%\pngcrush\pngcrush_w64.exe"
+IF "%WINBIT%" == "32" SET BIN_PNGCRUSH="%BIN%\pngcrush\pngcrush_w32.exe"
+REM # deflopt:
+SET BIN_DEFLOPT="%BIN%\deflopt\DeflOpt.exe"
 
 REM # our component scripts:
 SET OPTIMIZE_PK3="%BIN%\optimize_pk3.bat"
 SET OPTIMIZE_WAD="%BIN%\optimize_wad.bat"
-SET OPTIMIZE_PNG="%BIN%\optimize_png.bat"
 
 
 REM # process parameter list:
@@ -243,7 +251,7 @@ EXIT /B 0
 	REM # skip file is JPG optimization is disabled
 	IF %DO_PNG% EQU 0 GOTO :param_skip
 	IF %DOT% GTR 0 ECHO: & SET "DOT=0"
-	CALL %OPTIMIZE_PNG% "%~f1"
+	CALL :optimize_png "%~f1"
 	GOTO:EOF
 	
 	REM # WAD files:
@@ -378,17 +386,24 @@ EXIT /B 0
 REM ====================================================================================================================
 
 :optimize_jpg
+	REM # optimise the given JPG file
+	REM #
+	REM #	%1 = file-path
+	REM #
+	REM # returns ERRORLEVEL 0 if optimisation
+	REM # succeeded, ERRORLEVEL 1 if it failed
+	REM ------------------------------------------------------------------------------------------------------------
 	REM # display file name and current file size
 	CALL :display_status_left "%~f1"
 	
 	REM # jpegtran:
 	REM #	-optimize	: optimize without quality loss
 	REM # 	-copy none	: don't keep any metadata
-	"%BIN_JPEG%" -optimize -copy none "%~f1" "%~f1"  >NUL 2>&1
+	%BIN_JPEG% -optimize -copy none "%~f1" "%~f1"  >NUL 2>&1
 	IF ERRORLEVEL 1 (
 		REM # cap the status line
 		CALL :display_status_msg "! error <jpegtran>"
-		REM # if JPG optimisation failed return an error state; if the JPG was from a WAD or PK3 then these
+		REM # if JPG optimisation failed, return an error state; if the JPG was from a WAD or PK3 then these
 		REM # will *not* be cached so that they will always be retried in the future until there are no errors
 		REM # (we do not want to write off a WAD or PK3 as "done" when there are potential savings remaining)
 		EXIT /B 1
@@ -398,11 +413,170 @@ REM ============================================================================
 		REM # cap status line with the new file size
 		CALL :display_status_right "%~f1"
 	)
-	GOTO:EOF
+	EXIT /B 0
+
+:optimize_png
+	REM # optimise the given PNG file
+	REM #
+	REM #	%1 = file-path
+	REM #
+	REM # returns ERRORLEVEL 0 if optimisation
+	REM # succeeded, ERRORLEVEL 1 if it failed
+	REM ------------------------------------------------------------------------------------------------------------
+	REM # PNG optimisation occurs over several stages and we need to be aware if any one stage fails
+	SETLOCAL
+	SET "ERROR=0"
+	
+	REM # display file name and current file size
+	CALL :display_status_left "%~f1"
+	
+	REM # optimise with optipng:
+	CALL :optimize_optipng "%~f1"
+	REM # if that failed:
+	IF %ERRORLEVEL% NEQ 0 (
+		REM # cap the status line
+		CALL :display_status_msg "! error <optipng>"
+		REM # reprint the status line for the next iteration
+		CALL :display_status_left "%~f1"
+		REM # if any of the PNG tools fail, do not add the file to the cache
+		SET "ERROR=1"
+	)
+	
+	REM # optimise with pngout:
+	CALL :optimize_pngout "%~f1"
+	REM # if that failed:
+	REM # NOTE: pngout returns 2 for "unable to compress further", technically not an error!
+	IF %ERRORLEVEL% EQU 1 (
+		REM # cap the status line
+		CALL :display_status_msg "! error <pngout>"
+		REM # reprint the status line for the next iteration
+		CALL :display_status_left "%~f1"
+		REM # if any of the PNG tools fail, do not add the file to the cache
+		SET "ERROR=1"
+	)
+	
+	REM # optimise with pngcrush:
+	CALL :optimize_pngcrush "%~f1"
+	REM # if that failed:
+	IF %ERRORLEVEL% NEQ 0 (
+		REM # cap the status line
+		CALL :display_status_msg "! error <pngcrush>"
+		REM # reprint the status line for the next iteration
+		CALL :display_status_left "%~f1"
+		REM # if any of the PNG tools fail, do not add the file to the cache
+		SET "ERROR=1"
+	)
+	
+	REM # optimise with deflopt:
+	CALL :optimize_deflopt "%~f1"
+	REM # if that failed:
+	IF %ERRORLEVEL% NEQ 0 (
+		REM # cap the status line
+		CALL :display_status_msg "! error <deflopt>"
+		REM # exit with error so that any containing PK3/WAD
+		REM # is not written off as permenantly "done"
+		SET "ERROR=1"
+	)
+	
+	REM # if all optimisation stages passed:
+	IF %ERROR% EQU 0 (
+		REM # add the file to the hash-cache
+		CALL :hash_add "%~f1"
+		REM # cap status line with the new file size
+		CALL :display_status_right "%~f1"
+	)
+	
+	REM # if any of the PNG passes failed, return an error state; if the PNG was from a WAD or PK3 then these
+	REM # will *not* be cached so that they will always be retried in the future until there are no errors
+	REM # (we do not want to write off a WAD or PK3 as "done" when there are potential savings remaining)
+	ENDLOCAL & EXIT /B %ERROR%
+	
+:optimize_optipng
+	REM # optimise a PNG file using optipng
+	REM #
+	REM #	%1 = file-path
+	REM #
+	REM # returns ERRORLEVEL 0 if successful (or optipng not present),
+	REM # or ERRORLEVEL 1 for an error
+	REM ------------------------------------------------------------------------------------------------------------
+	REM # skip if binary not present
+	IF NOT EXIST "%BIN_OPTIPNG%" EXIT /B 0
+	
+	REM # optipng:
+	REM # 	-clobber	: overwrite input file
+	REM # 	-fix		: try to fix/work-around CRC errors
+	REM # 	-07       	: maximum compression level
+	REM # 	-i0       	: non-interlaced
+	%BIN_OPTIPNG% -clobber -fix -o7 -i0 -- "%~f1"  >NUL 2>&1
+	REM # return the error state
+	EXIT /B %ERRORLEVEL%
+
+:optimize_pngout
+	REM # optimise a PNG file using pngout
+	REM #
+	REM #	%1 = file-path
+	REM #
+	REM # returns ERRORLEVEL 0 if successful (or pngout not present),
+	REM # or ERRORLEVEL 1 for an error
+	REM ------------------------------------------------------------------------------------------------------------
+	REM # skip if not present
+	IF NOT EXIST "%BIN_PNGOUT%" EXIT /B 0
+	
+	REM # pngout:
+	REM #	/k...	: keep chunks
+	REM # 	/y	: assume yes (overwrite)
+	REM # 	/q	: quiet
+	%BIN_PNGOUT% "%~f1" /kgrAb,alPh /y /q  >NUL 2>&1
+	REM # return the error state
+	EXIT /B %ERRORLEVEL%
+
+:optimize_pngcrush
+	REM # optimise a PNG file using pngout
+	REM #
+	REM #	%1 = file-path
+	REM #
+	REM # returns ERRORLEVEL 0 if successful (or pngout not present),
+	REM # or ERRORLEVEL 1 for an error
+	REM ------------------------------------------------------------------------------------------------------------
+	REM # skip if not present
+	IF NOT EXIST "%BIN_PNGCRUSH%" EXIT /B 0
+
+	REM # pngcrush:
+	REM # 	-nobail		: don't stop trials if the filesize hasn't improved (yet)
+	REM # 	-blacken  	: sets background-color of fully-transparent pixels to 0; aids in compressability
+	REM # 	-brute		: tries 148 different methods for maximum compression (slow)
+	REM # 	-keep ...	: keep chunks
+	REM # 	-l 9		: maximum compression level
+	REM # 	-noforce	: make certain not to overwrite smaller file with larger one
+	REM # 	-ow		: overwrite the original file
+	REM # 	-reduce		: try reducing colour-depth if possible
+	%BIN_PNGCRUSH% -nobail -blacken -brute -keep grAb -keep alPh -l 9 -noforce -ow -reduce "%~f1"  >NUL 2>&1
+	REM # return the error state
+	EXIT /B %ERRORLEVEL%
+
+:optimize_deflopt
+	REM # optimise any FLATE-based file type
+	REM # (e.g. PNG or ZIP)
+	REM #
+	REM #	%1 = file-path
+	REM #
+	REM # returns ERRORLEVEL 0 if successful (or pngout not present),
+	REM # or ERRORLEVEL 1 for an error
+	REM ------------------------------------------------------------------------------------------------------------
+	REM # skip if not present
+	IF NOT EXIST "%BIN_DEFLOPT%" EXIT /B 0
+	
+	REM # deflopt:
+	REM # 	/a	: examine the file contents to determine if it's compressed (rather than extension alone)
+	REM # 	/k	: keep extra chunks (we must preserve "grAb" and "alPh" for DOOM)
+	%BIN_DEFLOPT% /a /k "%~f1"  >NUL 2>&1
+	REM # return the error state
+	EXIT /B %ERRORLEVEL%
 
 
 REM # common functions
 REM ====================================================================================================================
+
 :log
 	REM # write message to log-file only
 	REM #
