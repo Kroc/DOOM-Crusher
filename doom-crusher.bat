@@ -98,37 +98,10 @@ IF /I "%~1" == "/ZSTORE" (
 
 
 REM ====================================================================================================================
-REM # init
+REM # binaries
 REM --------------------------------------------------------------------------------------------------------------------
 REM # binaries path
 SET "BIN=%HERE%\bin"
-
-REM # location of log file
-SET LOG_FILE="%BIN%\log.txt"
-REM # clear the log file
-IF EXIST "%LOG_FILE%" DEL /F "%LOG_FILE%" >NUL 2>&1
-REM # failed?
-IF ERRORLEVEL 1 (
-	ECHO Could not clear the log file at:
-	ECHO %LOG_FILE%
-	EXIT /B 1
-)
-SET DOT=0
-
-ECHO:
-CALL :log_echo "# doom-crusher : v%VER%"
-CALL :log_echo "#     feedback : <github.com/Kroc/DOOM-Crusher> or <kroc+doom@camendesign.com>"
-REM # display which options have been set
-SET "OPTIONS="
-IF %DO_PNG% EQU 0 SET "OPTIONS=%OPTIONS%/NOPNG "
-IF %DO_JPG% EQU 0 SET "OPTIONS=%OPTIONS%/NOJPG "
-IF %DO_WAD% EQU 0 SET "OPTIONS=%OPTIONS%/NOWAD "
-IF %DO_PK3% EQU 0 SET "OPTIONS=%OPTIONS%/NOPK3 "
-IF %ZSTORE% EQU 1 SET "OPTIONS=%OPTIONS%/ZSTORE"
-IF NOT "%OPTIONS%" == "" (
-	CALL :log_echo "#      options : %OPTIONS%"
-)
-CALL :log_echo "###############################################################################"
 
 REM # detect 32-bit or 64-bit Windows
 SET "WINBIT=32"
@@ -140,6 +113,12 @@ REM # cache directory
 SET "CACHEDIR=%BIN%\cache"
 REM # if it doesn't exist create it
 IF NOT EXIST "%CACHEDIR%" MKDIR "%CACHEDIR%"  >NUL 2>&1
+REM # failed, somehow?
+IF ERRORLEVEL 1 (
+	ECHO ERROR! Could not create cache directory:
+	ECHO "%CACHEDIR%"
+	EXIT /B 1
+)
 
 REM # sha256deep:
 IF "%WINBIT%" == "64" SET BIN_HASH="%BIN%\md5deep\sha256deep64.exe"
@@ -161,22 +140,77 @@ IF "%WINBIT%" == "32" SET BIN_PNGCRUSH="%BIN%\pngcrush\pngcrush_w32.exe"
 REM # deflopt:
 SET BIN_DEFLOPT="%BIN%\deflopt\DeflOpt.exe"
 
+REM # location of the wadptr executable
+SET BIN_WADPTR="%BIN%\wadptr\wadptr.exe"
+REM # location of the lumpmod executable
+SET BIN_LUMPMOD="%BIN%\lumpmod\lumpmod.exe"
+
 REM # our component scripts:
 SET OPTIMIZE_PK3="%BIN%\optimize_pk3.bat"
-SET OPTIMIZE_WAD="%BIN%\optimize_wad.bat"
+
+REM # logging:
+REM --------------------------------------------------------------------------------------------------------------------
+REM # location of log file
+SET LOG_FILE="%BIN%\log.txt"
+REM # clear the log file
+IF EXIST "%LOG_FILE%" DEL /F "%LOG_FILE%" >NUL 2>&1
+REM # failed?
+IF ERRORLEVEL 1 (
+	ECHO ERROR! Could not clear the log file at:
+	ECHO "%LOG_FILE%"
+	EXIT /B 1
+)
+SET DOT=0
+
+ECHO:
+CALL :log_echo "# doom-crusher : v%VER%"
+CALL :log_echo "#     feedback : <github.com/Kroc/DOOM-Crusher> or <kroc+doom@camendesign.com>"
+REM # display which options have been set
+SET "OPTIONS="
+IF %DO_PNG% EQU 0 SET "OPTIONS=%OPTIONS%/NOPNG "
+IF %DO_JPG% EQU 0 SET "OPTIONS=%OPTIONS%/NOJPG "
+IF %DO_WAD% EQU 0 SET "OPTIONS=%OPTIONS%/NOWAD "
+IF %DO_PK3% EQU 0 SET "OPTIONS=%OPTIONS%/NOPK3 "
+IF %ZSTORE% EQU 1 SET "OPTIONS=%OPTIONS%/ZSTORE"
+IF NOT "%OPTIONS%" == "" (
+	CALL :log_echo "#      options : %OPTIONS%"
+)
+CALL :log_echo "###############################################################################"
+
+REM # create a temporary folder for all temp files this process creates.
+REM # this will allow (though it's not recommended) more than one instance
+REM # of doom-crusher.bat to run simultaneously
+
+REM # generate a unique id by stripping the non-digit characters from the current time
+SET "TEMP_SLUG=%TIME%"
+SET "TEMP_SLUG=%TEMP_SLUG::=%"
+SET "TEMP_SLUG=%TEMP_SLUG:,=%"
+SET "TEMP_SLUG=%TEMP_SLUG:.=%"
+SET "TEMP_SLUG=%TEMP_SLUG: =%"
+REM # now add a random number, just-in-case
+SET "TEMP_SLUG=%TEMP_SLUG%.%RANDOM%"
+REM # package it up into a full path
+SET "TEMP_DIR=%TEMP%\%~n0~%TEMP_SLUG%"
+
+REM # try create the directory
+MKDIR "%TEMP_DIR%"  >NUL 2>&1
+REM # did that fail?
+IF ERRORLEVEL 1 (
+	ECHO ERROR! Could not create temporary directory:
+	ECHO "%TEMP_DIR%"
+	EXIT /B 1
+)
 
 
 REM # process parameter list:
 REM ====================================================================================================================
 :params
 
-SET "DOT=0"
-
 REM # check if parameter is a directory
 REM # (this returns the file attributes, a "d" is added for directories)
 SET "ATTR=%~a1"
 IF /I "%ATTR:~0,1%" == "d" (
-	CALL :param_dir "%~f1"
+	CALL :optimize_dir "%~f1"
 ) ELSE (
 	REM # otherwise, it's a file path
 	CALL :process_file "%~f1"
@@ -191,22 +225,30 @@ IF NOT "%~1" == "" GOTO :params
 CALL :log_echo "###############################################################################"
 CALL :log_echo "# complete"
 ECHO:
+
+REM # clean-up:
+REM # remove the temporary directory (intentional duplicate)
+IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
+IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
+
 PAUSE
 EXIT /B 0
 
+	
+REM ====================================================================================================================
 
-:param_dir
+:optimize_dir
 	REM ------------------------------------------------------------------------------------------------------------
 	REM # the `FOR /R` loop works most reliably from the directory in question
 	PUSHD "%~f1"
 	REM # scan the directory given for crushable files:
 	REM # note that "*." is a special term to select all files *without* an extension
-	FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.pk3;*.lmp;*.) DO CALL :param_file "%%~fZ"
+	FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.pk3;*.lmp;*.) DO CALL :optimize_file "%%~fZ"
 	REM # put that thing back where it came from, or so help me
 	POPD
 	GOTO:EOF
 
-:param_file
+:optimize_file
 	REM # determine the file type of a file and process it accordingly
 	REM #
 	REM #	%1 = full path of file to process
@@ -215,175 +257,281 @@ EXIT /B 0
 	REM # determine the file type
 	CALL :get_filetype "%~f1"
 	REM # if not a recognised file type, skip the file
-	IF "%TYPE%" == "" GOTO :param_skip
+	IF "%TYPE%" == "" GOTO :file_skip
 	
-	REM # TODO: if WAD, check if IWAD first to allow skipping without hashing?
+	REM # we skip IWADs to avoid breaking detection routines in various DOOM engines
+	REM # TODO: should show a specific skip message for IWADs?
+	IF "%TYPE%" == "iwad" GOTO :file_skip
 	
 	REM # check the cache
 	CALL :hash_check "%~f1"
 	REM # if in the cache, skip the file
-	IF %ERRORLEVEL% EQU 0 GOTO :param_skip
+	IF %ERRORLEVEL% EQU 0 GOTO :file_skip
 	
 	REM # which file type?
-	IF "%TYPE%" == "jpg"  GOTO :param_jpg
-	IF "%TYPE%" == "png"  GOTO :param_png
-	IF "%TYPE%" == "wad"  GOTO :param_wad
-	IF "%TYPE%" == "pk3"  GOTO :param_pk3
+	IF "%TYPE%" == "jpg"  GOTO :file_jpg
+	IF "%TYPE%" == "png"  GOTO :file_png
+	IF "%TYPE%" == "wad"  GOTO :file_wad
+	IF "%TYPE%" == "pk3"  GOTO :file_pk3
 		
 	REM # this would be an error where `:get_filetype`
 	REM # returned something other than the above
-	ECHO "Internal error! `:get_filetype` return type unhandled."
-	EXIT /B 1
+	ECHO ERROR! `:get_filetype` return type unhandled.
+	GOTO :die
 	
-	:param_skip
+	:file_skip
 	CALL :dot
 	GOTO:EOF
 	
-	:param_jpg
-	REM # skip file is JPG optimization is disabled
-	IF %DO_JPG% EQU 0 GOTO :param_skip
+	:file_jpg
+	REM # skip file if JPG optimization is disabled
+	IF %DO_JPG% EQU 0 GOTO :file_skip
 	IF %DOT% GTR 0 ECHO: & SET "DOT=0"
 	CALL :optimize_jpg "%~f1"
 	GOTO:EOF
 	
 	REM # PNG files:
-	:param_png
-	REM # skip file is JPG optimization is disabled
-	IF %DO_PNG% EQU 0 GOTO :param_skip
+	:file_png
+	REM # skip file if PNG optimization is disabled
+	IF %DO_PNG% EQU 0 GOTO :file_skip
 	IF %DOT% GTR 0 ECHO: & SET "DOT=0"
 	CALL :optimize_png "%~f1"
 	GOTO:EOF
 	
 	REM # WAD files:
-	:param_wad
-	REM # skip file is JPG optimization is disabled
-	IF %DO_WAD% EQU 0 GOTO :param_skip
+	:file_wad
+	REM # skip file if JPG optimization is disabled
+	IF %DO_WAD% EQU 0 GOTO :file_skip
 	IF %DOT% GTR 0 ECHO: & SET "DOT=0"
-	CALL %OPTIMIZE_WAD% "%~f1"
+	CALL :optimize_wad "%~f1"
 	GOTO:EOF
 	
 	REM # PK3 files:
-	:param_pk3
-	REM # skip file is JPG optimization is disabled
-	IF %DO_PK3% EQU 0 GOTO :param_skip
+	:file_pk3
+	REM # skip file is WAD optimization is disabled
+	IF %DO_PK3% EQU 0 GOTO :file_skip
 	IF %DOT% GTR 0 ECHO: & SET "DOT=0"
 	CALL %OPTIMIZE_PK3% "%~f1"
 	GOTO:EOF
-	
-:get_filetype
-	REM # determines the type of a file by its extension,
-	REM # and if that's not possible, examines the file header
-	REM #
-	REM #	%1 = File path
-	REM #
-	REM # returns "jpg", "png", "wad", "pk3" for known types,
-	REM # or "" for unknown type in the `%TYPE%` variable
-	REM ------------------------------------------------------------------------------------------------------------
-	REM # by default, return blank
-	SET "TYPE="
-	
-	REM # simple file extension check
-	IF /I "%~x1" == ".jpg"  SET "TYPE=jpg" & GOTO:EOF
-	IF /I "%~x1" == ".jpeg" SET "TYPE=jpg" & GOTO:EOF
-	IF /I "%~x1" == ".png"  SET "TYPE=png" & GOTO:EOF
-	IF /I "%~x1" == ".wad"  SET "TYPE=wad" & GOTO:EOF
-	IF /I "%~x1" == ".pk3"  SET "TYPE=pk3" & GOTO:EOF
-	
-	REM # files with "lmp" exetension or no extension at all
-	REM # must be examined to determine their type
-	SET "IS_LUMP=0"
-	IF /I "%~x1" == ".lmp" SET "IS_LUMP=1"
-	IF    "%~x1" == ""     SET "IS_LUMP=1"
-	REM # if not a lump file, return blank
-	IF "%IS_LUMP%" == "0" GOTO:EOF
-	
-	REM # READ the first 1021 bytes of a file. a truly brilliant solution, thanks to:
-	REM # http://stackoverflow.com/a/7827243
-	SET "HEADER=" & SET /P HEADER=< "%~f1"
-	
-	REM # sometimes these bytes can glitch the parser,
-	REM # so we delay their insertion until runtime:
-	SETLOCAL ENABLEDELAYEDEXPANSION
-	REM # a JPEG file?
-	REM # IMPORTANT: these bytes are "0xFF,0xD8"
-	IF "!HEADER:~0,2!" == "ÿØ"  ENDLOCAL & SET "TYPE=jpg" & GOTO:EOF
-	REM # a PNG file?
-	IF "!HEADER:~1,3!" == "PNG" ENDLOCAL & SET "TYPE=png" & GOTO:EOF
-	REM # a WAD file?
-	IF "!HEADER:~1,3!" == "WAD" ENDLOCAL & SET "TYPE=wad" & GOTO:EOF
-	
-	REM # not a file type we deal with, return blank
-	ENDLOCAL
-	GOTO:EOF
 
-:hash_check
-	REM # check if a file already exists in the cache
+:optimize_wad
+	REM # optimise the given WAD file
 	REM #
 	REM #	%1 = file-path
 	REM #
-	REM # returns ERRORLEVEL 0 if the file is in the cache,
-	REM # ERRORLEVEL 1 for any other reason
+	REM # returns ERRORLEVEL 0 if optimisation
+	REM # succeeded, ERRORLEVEL 1 if it failed
 	REM ------------------------------------------------------------------------------------------------------------
-	REM # get the path for the hash-cache file
-	CALL :hash_name "%~f1"
+	SETLOCAL
+	REM # if PNG/JPG files are being skipped but this WAD doesn't
+	REM # contain any, then we can still add the WAD to the cache
+	SET "ANY_PNG=0"
+	SET "ANY_JPG=0"
+	REM # we'll avoid displaying the split-line if the WAD doesn't contain any lumps we can optimise
+	SET "ANY=0"
+	REM # if the WAD or internal JPG/PNG optimisation fails, return an error state; if the WAD was from a PK3 then
+	REM # it will *not* be cached so that it will always be retried in the future until there are no errors
+	REM # (we do not want to write off a PK3 as "done" when there are potential savings remaining)
+	SET "ERROR=0"
+	SET "USE_CACHE=1"
 	
-	REM # (use of quotes in a FOR command here is fraught with complications:
-	REM #  http://stackoverflow.com/questions/22636308)
-	FOR /F "eol=* tokens=* delims=" %%A IN ('^" %BIN_HASH% -s -m %HASHFILE% -b "%~f1" ^"') DO (
-		IF /I "%%A" == "%~nx1" EXIT /B 0
+	REM # display file name and current file size
+	CALL :display_status_left "%~f1"
+	
+	REM # wadptr is extremely buggy and might just decide to process every WAD in the same folder even though you
+	REM # gave it a single file name. to make this process more reliable we'll set up a temporary sub-folder and
+	REM # copy the WAD into there to isolate it from other WAD files and stuff
+	SET "TEMP_WADDIR=%TEMP_DIR%\%~nx1~%RANDOM%"
+	SET "TEMP_WAD=%TEMP_WADDIR%\%~nx1"
+	REM # attempt to create the temporary folder...
+	MKDIR "%TEMP_WADDIR%"  >NUL 2>&1
+	REM # failed?
+	IF ERRORLEVEL 1 (
+		CALL :display_status_msg "! error <mkdir>"
+		CALL :log_echo "==============================================================================="
+		CALL :log_echo
+		CALL :log_echo "ERROR: Could not create directory:"
+		CALL :log_echo "%TEMP_WADDIR%"
+		CALL :log_echo
+		GOTO :die
 	)
-	EXIT /B 1
+	REM # copy the WAD to the temporary directory; we could save a lot of I/O if we moved it and then moved it back
+	REM # when we were done, but if the script is stopped or crashes we don't want to misplace the original files
+	COPY /Y "%~f1" "%TEMP_WAD%"  >NUL 2>&1
+	REM # did the copy fail?
+	IF ERRORLEVEL 1 (
+		REM # cap the status line to say that the copy errored
+		CALL :display_status_msg "! error <copy>"
+		CALL :log_echo "==============================================================================="
+		CALL :log_echo
+		CALL :log_echo "ERROR: Could not copy WAD to temporary directory:"
+		CALL :log_echo "%TEMP_WAD%"
+		CALL :log_echo
+		GOTO :die
+	)
+	
+	REM # list the WAD contents and get the name and length of each lump:
+	REM # (lumpmod.exe has been modified to also provide the filetype, with thanks to _mental_)
+	REM # NB: use of quotes in a FOR command here is fraught with complications:
+	REM #     http://stackoverflow.com/questions/22636308
+	FOR /F "tokens=1-4 eol=" %%A IN ('^" "%BIN_LUMPMOD%" "%TEMP_WAD%" list -v "^"') DO (
+		REM # NB: it's possible for a lump name to be missing! (see "jptr_v40.wad"),
+		REM #     in which case the fields are shifted along, leaving `%%D` blank
+		IF NOT "%%D" == "" (
+			REM # process the WAD lump: (extracts and optimises)
+			CALL :optimize_lump "%TEMP_WAD%" "%%A" "%%B" "%%C" "%%D"
+			REM # if processing the lump failed, do not cache the WAD
+			IF %ERRORLEVEL% GTR 0 SET "ERROR=1"
+		)
+	)
+	
+	REM # mark the end of WAD contents if any lump was optimised
+	IF %ANY% EQU 1 (
+		CALL :log_echo "  -----------------------------------------------------------------------------"
+		CALL :display_status_left "%~f1"
+	)
+	
+	REM # use wadptr to optimize a WAD:
+	
+	REM # change to the temporary directory, wadptr is prone to choking on absolute/relative paths,
+	REM # it's best to give it a single file name within the current directory
+	PUSHD "%TEMP_WADDIR%"
 
-:hash_add
-	REM # add a file to the hash-cache
+	REM # wadptr:
+	REM # 	-c	: compress
+	REM # 	-nopack	: skip sidedef packing as this can cause glitches in maps
+	%BIN_WADPTR% -c -nopack "%~nx1"  >NUL 2>&1
+	REM # if this errors, the WAD won't have been changed so we can continue
+	IF ERRORLEVEL 1 (
+		REM # cap the status line to say that wadptr errored,
+		REM # but otherwise continue
+		CALL :display_status_msg "! error <wadptr>"
+		REM # note error state so that the WAD will not be cached
+		SET "ERROR=1"
+	) ELSE (
+		REM # cap status line with the new file size
+		CALL :display_status_right "%~f1"
+	)
+	REM # can leave the directory now
+	REM # (the copy below uses absolute paths)
+	POPD
+	
+	REM # TODO: if no change the WAD occurred, do not copy it back nor add to the cache
+	
+	IF %ERROR% EQU 0 (
+		REM # temporary WAD has been optimized, replace the original
+		REM # (if this were to error just continue with the clean-up)
+		COPY /Y "%TEMP_WAD%" "%~f1"  >NUL 2>&1
+		IF ERRORLEVEL 1 (
+			CALL :log_echo
+			CALL :log_echo "ERROR: Could not replace the original WAD with the new version."
+			CALL :log_echo
+			EXIT /B 1
+		)
+	)
+	
+	REM # remove the temporary directory (intentional duplicate)
+	IF EXIST "%TEMP_WADDIR%" RMDIR /S /Q "%TEMP_WADDIR%"  >NUL 2>&1
+	IF EXIST "%TEMP_WADDIR%" RMDIR /S /Q "%TEMP_WADDIR%"  >NUL 2>&1
+	
+	REM # add the file to the hash-cache?
+	IF %ERROR% EQU 1 SET "USE_CACHE=0"
+	IF %DO_JPG% EQU 0 (
+		IF %ANY_JPG% EQU 1 SET "USE_CACHE=0"
+	)
+	IF %DO_PNG% EQU 0 (
+		IF %ANY_PNG% EQU 1 SET "USE_CACHE=0"
+	)
+	IF %USE_CACHE% EQU 1 CALL :hash_add "%~f1"
+	
+	ENDLOCAL & EXIT /B %ERROR%
+
+:optimize_lump
+	REM # optimize a WAD lump
 	REM #
-	REM #	%1 = file-path
+	REM #	%1 = path of WAD file
+	REM #	%2 = lump ID
+	REM #	%3 = lump name
+	REM #	%4 = lump size (in bytes)
+	REM #	%5 = lump type ("PNG", "JPG" or "LMP")
+	REM #
+	REM # returns ERRORLEVEL 0 if successful, or ERRORLEVEL 1 for any failure.
+	REM # if a lump is skipped because it is not optimisable, ERRORLEVEL 0 is still returned
 	REM ------------------------------------------------------------------------------------------------------------
-	REM # get the path for the hash-cache file
-	CALL :hash_name "%~f1"
+	REM # lumps of length 0 are just markers and can be skipped
+	IF "%~4" == "0"   GOTO :lump_skip
+	REM # only process JPG or PNG lumps
+	IF "%~5" == "LMP" GOTO :lump_skip
 	
-	REM # hash the file:
-	REM # the output of the command is full of problems that make it difficult to parse in Batch,
-	REM # from padding-spaces to multiple space gaps between columns, we need to normalise it first
-
-	REM # sha256deep:
-	REM # 	-s	: silent, don't include non-hash text in the output
-	REM # 	-q	: no filename
-	REM # use of quotes in a FOR command here is fraught with complications:
-	REM # http://stackoverflow.com/questions/22636308
-	FOR /F "eol=* delims=" %%A IN ('^" %BIN_HASH% -s -q "%~f1" ^"') DO @SET "HASH=%%A"
-	REM # compact multiple spaces into a single colon
-	SET "HASH=%HASH:  =:%"
-	SET "HASH=%HASH:::=:%"
-	SET "HASH=%HASH:::=:%"
-	REM # now split the columns
-	FOR /F "eol=* tokens=1-2 delims=:" %%A IN ("%HASH%") DO (
-		REM # write the hash to the hash-cache
-		ECHO %%A  %~nx1>>%HASHFILE%
+	REM # ensure the lump name can be written to disk
+	REM # (may contain invalid file-system characters)
+	REM # TODO : handle astrisk, very difficult to do properly
+	SET "LUMP=%~3"
+	SET "LUMP=%LUMP:<=[%"
+	SET "LUMP=%LUMP:<=]%"
+	SET "LUMP=%LUMP:(=_%"
+	SET "LUMP=%LUMP:)=_%"
+	SET "LUMP=%LUMP:<=_%"
+	SET "LUMP=%LUMP:>=_%"
+	SET "LUMP=%LUMP::=_%"
+	SET 'LUMP=%LUMP:"=_%'
+	SET "LUMP=%LUMP:/=_%"
+	SET "LUMP=%LUMP:\=_%"
+	SET "LUMP=%LUMP:|=_%"
+	SET "LUMP=%LUMP:?=_%"
+	SET "LUMP=%LUMP:!=_%"
+	SET "LUMP=%LUMP:&=_%"
+	REM # this is where the lump will go
+	SET "LUMP=%TEMP_DIR%\%LUMP%.%~5"
+	
+	REM # extract the lump to disk to optimize it
+	%BIN_LUMPMOD% "%~f1" extract "%~3" "%LUMP%"  >NUL 2>&1
+	REM # only continue if this succeeded
+	IF ERRORLEVEL 1 (
+		REM # do not allow a containing PK3/WAD file to be cached
+		REM # TODO: display the file status line to show a lumpmod error?
+		EXIT /B 1
 	)
-	GOTO:EOF
-
-:hash_name
-	REM # gets the file-path to the hash-cache to use for the given file
-	REM #
-	REM #	%1 = file-path to file that will be hashed
-	REM #
-	REM # sets `%HASHFILE%` with full path to the hash-cache file to use
-	REM ------------------------------------------------------------------------------------------------------------
-	REM # the different file-types are separated into different hash buckets.
-	REM # this is to avoid unecessary slow-down from large buckets (png) affecting smaller ones (jpg)
-	CALL :get_filetype "%~f1"
 	
-	REM # pick the filename for the hash-cache
-	SET "HASHFILE=%CACHEDIR%\hashes_%TYPE%.txt"
-	REM # when the /ZSTORE option is enabled, PK3 files use a different hash file
-	IF %ZSTORE% EQU 1 (
-		IF "%TYPE%" == "pk3" SET "HASHFILE=%CACHEDIR%\hashes_pk3_zstore.txt"
-	)
-	GOTO:EOF
+	REM # display the split-line to indicate WAD contents
+	CALL :any_ok
 	
+	REM # if a PNG lump, mark the PK3/WAD as containing at least one PNG file;
+	REM # this will prevent the PK3/WAD file being cached if PNG files are being skipped
+	IF "%~5" == "PNG" SET "ANY_PNG=1"
+	REM # if a JPG lump, mark the PK3/WAD as containing at least one JPG file;
+	REM # this will prevent the PK3/WAD file being cached if JPG files are being skipped
+	IF "%~5" == "JPG" SET "ANY_JPG=1"
 	
-REM ====================================================================================================================
+	REM # process the lump like any other file.
+	REM # if the lump has been cached, this will return "success"
+	CALL :optimize_file "%LUMP%"
+	REM # return failure of optimisation
+	IF ERRORLEVEL 1 EXIT /B 1
+	
+	REM # was the lump omptimized?
+	REM # (the orginal lump size is already in `%~4`)
+	CALL :filesize LUMP_SIZE "%LUMP%"
+	REM # compare sizes; if not smaller, leave the original file
+	IF %LUMP_SIZE% GEQ %~4 EXIT /B 0
+	
+	REM # put the lump back into the WAD
+	%BIN_LUMPMOD% "%~f1" update "%~3" "%LUMP%"  >NUL 2>&1
+	REM # if that errored we won't cache the WAD
+	IF ERRORLEVEL 1 EXIT /B 1
+	
+	REM # the lump was optimised and re-inserted into the WAD,
+	REM # exit successful
+	EXIT /B 0
+	
+	:lump_skip
+	REM # the lump can't/won't be optimized, show a dot on screen to demonstrate progress:
+	REM # if the split line hasn't been shown yet, do so now
+	IF %ANY% EQU 0 CALL :any_ok
+	REM # display a dot (and manage line-wrapping)
+	CALL :dot
+	REM # return no error
+	EXIT /B 0
 
 :optimize_jpg
 	REM # optimise the given JPG file
@@ -573,6 +721,122 @@ REM ============================================================================
 	REM # return the error state
 	EXIT /B %ERRORLEVEL%
 
+REM ====================================================================================================================
+
+:get_filetype
+	REM # determines the type of a file by its extension,
+	REM # and if that's not possible, examines the file header
+	REM #
+	REM #	%1 = File path
+	REM #
+	REM # returns "jpg", "png", "wad"/"iwad", "pk3" for known types,
+	REM # or "" for unknown type in the `%TYPE%` variable
+	REM ------------------------------------------------------------------------------------------------------------
+	REM # by default, return blank
+	SET "TYPE="
+	
+	REM # simple file extension check
+	IF /I "%~x1" == ".jpg"  SET "TYPE=jpg" & GOTO:EOF
+	IF /I "%~x1" == ".jpeg" SET "TYPE=jpg" & GOTO:EOF
+	IF /I "%~x1" == ".png"  SET "TYPE=png" & GOTO:EOF
+	IF /I "%~x1" == ".pk3"  SET "TYPE=pk3" & GOTO:EOF
+	
+	REM # files with "lmp" exetension or no extension at all must be examined to determine their type,
+	REM # and WAD files must be examined to separate IWADs and PWADs
+	SET "IS_LUMP=0"
+	IF /I "%~x1" == ".wad" SET "IS_LUMP=1"
+	IF /I "%~x1" == ".lmp" SET "IS_LUMP=1"
+	IF    "%~x1" == ""     SET "IS_LUMP=1"
+	REM # if not a lump file, return blank
+	IF %IS_LUMP% EQU 0 GOTO:EOF
+	
+	REM # READ the first 1021 bytes of a file. a truly brilliant solution, thanks to:
+	REM # http://stackoverflow.com/a/7827243
+	SET "HEADER=" & SET /P HEADER=< "%~f1"
+	
+	REM # sometimes these bytes can glitch the parser,
+	REM # so we delay their insertion until runtime:
+	SETLOCAL ENABLEDELAYEDEXPANSION
+	REM # a JPEG file?
+	REM # IMPORTANT: these bytes are "0xFF,0xD8"
+	IF "!HEADER:~0,2!" == "ÿØ"   ENDLOCAL & SET "TYPE=jpg"  & GOTO:EOF
+	REM # a PNG file?
+	IF "!HEADER:~1,3!" == "PNG"  ENDLOCAL & SET "TYPE=png"  & GOTO:EOF
+	REM # a PWAD file?
+	IF "!HEADER:~0,4!" == "PWAD" ENDLOCAL & SET "TYPE=wad"  & GOTO:EOF
+	REM # an IWAD file?
+	IF "!HEADER:~0,4!" == "IWAD" ENDLOCAL & SET "TYPE=iwad" & GOTO:EOF
+	
+	REM # not a file type we deal with, return blank
+	ENDLOCAL
+	GOTO:EOF
+
+:hash_check
+	REM # check if a file already exists in the cache
+	REM #
+	REM #	%1 = file-path
+	REM #
+	REM # returns ERRORLEVEL 0 if the file is in the cache,
+	REM # ERRORLEVEL 1 for any other reason
+	REM ------------------------------------------------------------------------------------------------------------
+	REM # get the path for the hash-cache file
+	CALL :hash_name "%~f1"
+	
+	REM # (use of quotes in a FOR command here is fraught with complications:
+	REM #  http://stackoverflow.com/questions/22636308)
+	FOR /F "eol=* tokens=* delims=" %%A IN ('^" %BIN_HASH% -s -m %HASHFILE% -b "%~f1" ^"') DO (
+		IF /I "%%A" == "%~nx1" EXIT /B 0
+	)
+	EXIT /B 1
+
+:hash_add
+	REM # add a file to the hash-cache
+	REM #
+	REM #	%1 = file-path
+	REM ------------------------------------------------------------------------------------------------------------
+	REM # get the path for the hash-cache file
+	CALL :hash_name "%~f1"
+	
+	REM # hash the file:
+	REM # the output of the command is full of problems that make it difficult to parse in Batch,
+	REM # from padding-spaces to multiple space gaps between columns, we need to normalise it first
+
+	REM # sha256deep:
+	REM # 	-s	: silent, don't include non-hash text in the output
+	REM # 	-q	: no filename
+	REM # use of quotes in a FOR command here is fraught with complications:
+	REM # http://stackoverflow.com/questions/22636308
+	FOR /F "eol=* delims=" %%A IN ('^" %BIN_HASH% -s -q "%~f1" ^"') DO @SET "HASH=%%A"
+	REM # compact multiple spaces into a single colon
+	SET "HASH=%HASH:  =:%"
+	SET "HASH=%HASH:::=:%"
+	SET "HASH=%HASH:::=:%"
+	REM # now split the columns
+	FOR /F "eol=* tokens=1-2 delims=:" %%A IN ("%HASH%") DO (
+		REM # write the hash to the hash-cache
+		ECHO %%A  %~nx1>>%HASHFILE%
+	)
+	GOTO:EOF
+
+:hash_name
+	REM # gets the file-path to the hash-cache to use for the given file
+	REM #
+	REM #	%1 = file-path to file that will be hashed
+	REM #
+	REM # sets `%HASHFILE%` with full path to the hash-cache file to use
+	REM ------------------------------------------------------------------------------------------------------------
+	REM # the different file-types are separated into different hash buckets.
+	REM # this is to avoid unecessary slow-down from large buckets (png) affecting smaller ones (jpg)
+	CALL :get_filetype "%~f1"
+	
+	REM # pick the filename for the hash-cache
+	SET "HASHFILE=%CACHEDIR%\hashes_%TYPE%.txt"
+	REM # when the /ZSTORE option is enabled, PK3 files use a different hash file
+	IF %ZSTORE% EQU 1 (
+		IF "%TYPE%" == "pk3" SET "HASHFILE=%CACHEDIR%\hashes_pk3_zstore.txt"
+	)
+	GOTO:EOF
+	
 
 REM # common functions
 REM ====================================================================================================================
@@ -639,6 +903,17 @@ REM ============================================================================
 	)
 	GOTO:EOF
 	
+:any_ok
+	REM # only display the split line for a WAD if there any lumps that will be optimised in the WAD
+	REM ------------------------------------------------------------------------------------------------------------
+	IF %ANY% EQU 0 (
+		CALL :display_status_msg ": processing..."
+		CALL :log_echo "  -----------------------------------------------------------------------------"
+		SET "ANY=1"
+		SET "DOT=0"
+	)
+	GOTO:EOF
+	
 :filesize
 	REM # get a file size (in bytes):
 	REM #
@@ -681,7 +956,7 @@ REM ============================================================================
 		GOTO :display_status_right__echo
 	)
 	REM # calculate the perctange difference
-	CALL "%BIN%\get_percentage.bat" SAVED %SIZE_OLD% %SIZE_NEW%
+	CALL :get_percentage SAVED %SIZE_OLD% %SIZE_NEW%
 	SET "SAVED=   %SAVED%"
 	REM # increase or decrease in size?
 	IF %SIZE_NEW% GTR %SIZE_OLD% SET "SAVED=+%SAVED:~-3%"
@@ -712,7 +987,40 @@ REM ============================================================================
 	ECHO !TEXT!
 	CALL :log "%STATUS_LEFT%!TEXT!"
 	ENDLOCAL & GOTO:EOF
+
+:get_percentage
+	SETLOCAL
 	
+	REM # the largest number we can use before it becomes negative (equivilent to 2 GB in bytes)
+	SET /A MAXINT=2*1024*1024*1024,MAXINT-=1
+	REM # the largest number we can multiply by 100 before it becomes too big (approx. 20.9 MB)
+	SET /A MAX100=MAXINT/100
+	
+	SET "OLD=%2"
+	SET "NEW=%3"
+	
+	REM # if the old number is too large, divide both by 1000 to bring the final calulcation within safe range
+	IF %OLD% GTR %MAX100% SET /A "OLD/=1000,NEW/=1000"
+	REM # if the new number is too large, divide both by 1000 to bring the final calulcation within safe range
+	IF %NEW% GTR %MAX100% SET /A "OLD/=1000,NEW/=1000"
+	
+	REM # same?
+	IF %OLD% EQU %NEW% (
+		REM # return 0%
+		SET /A VAL=0
+	) ELSE (
+		REM # increase or decrease?
+		IF %NEW% GTR %OLD% (
+			SET /A VAL=100*NEW/OLD
+		) ELSE (
+			SET /A VAL=100-100*NEW/OLD
+		)
+	)
+	
+	REM # return the percentage value in the variable name provided
+	ENDLOCAL & SET "%1=%VAL%"
+	GOTO:EOF
+
 :format_filesize_bytes
 	REM ------------------------------------------------------------------------------------------------------------
 	SETLOCAL
@@ -736,3 +1044,7 @@ REM ============================================================================
 	SET "%~1=%RESULT%" 
 	ENDLOCAL & SET "%~1=%RESULT%"
 	GOTO:EOF
+
+
+REM ====================================================================================================================
+:die
