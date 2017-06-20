@@ -137,6 +137,7 @@ SET BIN_PNGOUT="%BIN%\pngout\pngout.exe"
 REM # pngcrush:
 IF "%WINBIT%" == "64" SET BIN_PNGCRUSH="%BIN%\pngcrush\pngcrush_w64.exe"
 IF "%WINBIT%" == "32" SET BIN_PNGCRUSH="%BIN%\pngcrush\pngcrush_w32.exe"
+
 REM # deflopt:
 SET BIN_DEFLOPT="%BIN%\deflopt\DeflOpt.exe"
 
@@ -144,9 +145,6 @@ REM # location of the wadptr executable
 SET BIN_WADPTR="%BIN%\wadptr\wadptr.exe"
 REM # location of the lumpmod executable
 SET BIN_LUMPMOD="%BIN%\lumpmod\lumpmod.exe"
-
-REM # our component scripts:
-SET OPTIMIZE_PK3="%BIN%\optimize_pk3.bat"
 
 REM # logging:
 REM --------------------------------------------------------------------------------------------------------------------
@@ -190,7 +188,7 @@ SET "TEMP_SLUG=%TEMP_SLUG: =%"
 REM # now add a random number, just-in-case
 SET "TEMP_SLUG=%TEMP_SLUG%.%RANDOM%"
 REM # package it up into a full path
-SET "TEMP_DIR=%TEMP%\%~n0~%TEMP_SLUG%"
+SET "TEMP_DIR=%TEMP%\doom-crusher~%TEMP_SLUG%"
 
 REM # try create the directory
 MKDIR "%TEMP_DIR%"  >NUL 2>&1
@@ -238,20 +236,44 @@ EXIT /B 0
 REM ====================================================================================================================
 
 :optimize_dir
+	REM # search a directory (and sub-directories) for optimisable files
+	REM #
+	REM #	%1 = directory-path
+	REM #
+	REM # returns ERRORLEVEL 0 if there were no errors in any of the files optimised,
+	REM # otherwise ERRORLEVEL 1 where any file could not be optimised
 	REM ------------------------------------------------------------------------------------------------------------
+	SETLOCAL
+	SET "ERROR=0"
 	REM # the `FOR /R` loop works most reliably from the directory in question
 	PUSHD "%~f1"
 	REM # scan the directory given for crushable files:
-	REM # note that "*." is a special term to select all files *without* an extension
-	FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.pk3;*.lmp;*.) DO CALL :optimize_file "%%~fZ"
+	REM # note that "*." is a special term to select all files *without* an extension,
+	REM # but will also pick up files that begin with a dot (e.g. ".gitignore")
+	FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.pk3;*.lmp;*.) DO CALL :optimize_dir__file "%%~fZ"
 	REM # put that thing back where it came from, or so help me
 	POPD
+	ENDLOCAL & EXIT /B %ERROR%
+	
+	:optimize_dir__file
+	CALL :optimize_file "%~f1"
+	IF ERRORLEVEL 1 SET "ERROR=1"
 	GOTO:EOF
 
 :optimize_file
 	REM # determine the file type of a file and process it accordingly
 	REM #
 	REM #	%1 = full path of file to process
+	REM #
+	REM # returns ERRORLEVEL 0 if optimisation succeeded 
+	REM # (or file was skipped), ERRORLEVEL 1 if it failed
+	REM # 
+	REM # will set the `%ANY_*% variable according to the file optimised
+	REM # -- i.e.
+	REM #	`%ANY_JPG%` will be set to "1" if file is a JPG
+	REM # 	`%ANY_PNG%` will be set to "1" if file is a PNG
+	REM #	`%ANY_WAD%` will be set to "1" if file is a WAD
+	REM #	`%ANY_PK3%` will be set to "1" if file is a PK3
 	REM ------------------------------------------------------------------------------------------------------------
 	
 	REM # determine the file type
@@ -259,13 +281,35 @@ REM ============================================================================
 	REM # if not a recognised file type, skip the file
 	IF "%TYPE%" == "" GOTO :file_skip
 	
+	REM # note the occurance of a particular file-type.
+	REM # this is used to allow container files like WAD & PK3 to still
+	REM # be added to the cache when some file types are being skipped
+	IF "%TYPE%" == "jpg"  SET "ANY_JPG=1"
+	IF "%TYPE%" == "png"  SET "ANY_PNG=1"
+	IF "%TYPE%" == "wad"  SET "ANY_WAD=1"
+	IF "%TYPE%" == "pk3"  SET "ANY_PK3=1"
 	REM # we skip IWADs to avoid breaking detection routines in various DOOM engines
 	REM # TODO: should show a specific skip message for IWADs?
 	IF "%TYPE%" == "iwad" GOTO :file_skip
 	
+	REM # we won't waste time hashing files that we are automatically skipping
+	IF "%TYPE%" == "jpg" (
+		IF %DO_JPG% EQU 0 GOTO :file_skip
+	)
+	IF "%TYPE%" == "png" (
+		IF %DO_PNG% EQU 0 GOTO :file_skip
+	)
+	IF "%TYPE%" == "wad" (
+		IF %DO_WAD% EQU 0 GOTO :file_skip
+	)
+	IF "%TYPE%" == "pk3" (
+		IF %DO_PK3% EQU 0 GOTO :file_skip
+	)
+	
 	REM # check the cache
 	CALL :hash_check "%~f1"
 	REM # if in the cache, skip the file
+	REM # NOTE: if we are skipping PNG or JPG files
 	IF %ERRORLEVEL% EQU 0 GOTO :file_skip
 	
 	REM # which file type?
@@ -281,39 +325,176 @@ REM ============================================================================
 	
 	:file_skip
 	CALL :dot
-	GOTO:EOF
+	EXIT /B 0
 	
 	:file_jpg
-	REM # skip file if JPG optimization is disabled
-	IF %DO_JPG% EQU 0 GOTO :file_skip
-	IF %DOT% GTR 0 ECHO: & SET "DOT=0"
 	CALL :optimize_jpg "%~f1"
-	GOTO:EOF
+	SET "DOT=0"
+	EXIT /B %ERRORLEVEL%
 	
 	REM # PNG files:
 	:file_png
-	REM # skip file if PNG optimization is disabled
-	IF %DO_PNG% EQU 0 GOTO :file_skip
-	IF %DOT% GTR 0 ECHO: & SET "DOT=0"
 	CALL :optimize_png "%~f1"
-	GOTO:EOF
+	SET "DOT=0"
+	EXIT /B %ERRORLEVEL%
 	
 	REM # WAD files:
 	:file_wad
-	REM # skip file if JPG optimization is disabled
-	IF %DO_WAD% EQU 0 GOTO :file_skip
-	IF %DOT% GTR 0 ECHO: & SET "DOT=0"
 	CALL :optimize_wad "%~f1"
-	GOTO:EOF
+	SET "DOT=0"
+	EXIT /B %ERRORLEVEL%
 	
 	REM # PK3 files:
 	:file_pk3
-	REM # skip file is WAD optimization is disabled
-	IF %DO_PK3% EQU 0 GOTO :file_skip
-	IF %DOT% GTR 0 ECHO: & SET "DOT=0"
-	CALL %OPTIMIZE_PK3% "%~f1"
-	GOTO:EOF
+	CALL :optimize_pk3 "%~f1"
+	SET "DOT=0"
+	EXIT /B %ERRORLEVEL%
 
+:optimize_pk3
+	REM # returns ERRORLEVEL 0 if optimisation
+	REM # succeeded, ERRORLEVEL 1 if it failed
+	REM ------------------------------------------------------------------------------------------------------------
+	REM # localise this routine so variables don't conflict
+	REM # for files within files, e.g. PK3>WAD>PNG
+	SETLOCAL
+	REM # if PNG/JPG/WAD files are being skipped but this PK3 doesn't
+	REM # contain any, then we can still add the PK3 to the cache
+	SET "ANY_PNG=0"
+	SET "ANY_JPG=0"
+	SET "ANY_WAD=0"
+	REM # we'll avoid displaying the split-line if the PK3 doesn't contain any files we can optimise
+	SET "ANY=0"
+	
+	SET "ERROR=0"
+	SET "USE_CACHE=1"
+	
+	REM # display file name and current file size
+	CALL :display_status_left "%~f1"
+	
+	REM # we'll unpack the PK3 to a temporary directory
+	SET "TEMP_PK3DIR=%TEMP_DIR%\%~nx1~%RANDOM%"
+	SET "TEMP_PK3=%TEMP_PK3DIR%\%~nx1"
+	REM # attempt to create the temporary folder...
+	MKDIR "%TEMP_PK3DIR%"  >NUL 2>&1
+	REM # failed?
+	IF ERRORLEVEL 1 (
+		CALL :display_status_msg "! error <mkdir>"
+		CALL :log_echo "==============================================================================="
+		CALL :log_echo
+		CALL :log_echo "ERROR: Could not create temporary directory:"
+		CALL :log_echo "%TEMP_PK3DIR%"
+		CALL :log_echo
+		GOTO :die
+	)
+	
+	REM # unpack the PK3:
+	
+	REM # display something on the console to indicate what's happening
+	SET "STATUS_LEFT=%STATUS_LEFT%: unpacking... "
+	<NUL (SET /P "$=: unpacking... ")
+	
+	REM # 7zip:
+	REM #	x		: "extract" (with subfolders)
+	REM #	-aos		: overwrite files
+	REM #	-o"..."		: output folder
+	REM #	-tzip		: assume ZIP file, despite file-extension
+	REM #	--		: stop processing switches, source-file follows
+	%BIN_7ZA% x -aos -o"%TEMP_PK3DIR%" -tzip -- "%~f1"  >NUL 2>&1
+	
+	IF ERRORLEVEL 1 (
+		REM # cap the status line
+		CALL :display_status_msg "err!"
+		CALL :log_echo "==============================================================================="
+		
+		REM # redo the decompression, displaying results on screen
+		%BIN_7ZA% x -aos -o"%TEMP_PK3DIR%" -tzip -- "%~f1"
+		
+		REM # quit with error level set
+		EXIT /B 1
+	)
+	
+	REM # cap the status line to say that the unpacked succeeded
+	CALL :display_status_msg "done"
+	REM # underscore the PK3 to show we're exploring the contents
+	CALL :log_echo "  ============================================================================="
+	
+	REM # with the PK3 unpacked, we can optimise the directory like any other.
+	REM # note that this will set the `%ANY_*%` variables accordingly
+	CALL :optimize_dir "%TEMP_PK3DIR%"
+	REM # if any individual file failed to optimize, we will repack the PK3,
+	REM # but not add it to the cache so that it will be retried in the future
+	IF ERRORLEVEL 1 SET "ERROR=1"
+	
+	REM # repack the PK3:
+	REM # switch to the temporary directory so that the PK3 files are
+	REM # at the base of the ZIP file rather than in a sub-folder
+	PUSHD "%TEMP_PK3DIR%"
+	
+	REM # are we using compression or not?
+	REM # PRO TIP: a PK3 file made without compression will boot faster in your DOOM engine of choice, and will aid 
+	REM #          compression of multiple PK3s together in 7Zip / WinRAR when using a large (128+MB) dictionary
+	IF %ZSTORE% EQU 1 (
+		REM # use no compression
+		SET REPACK_PK3=%BIN_7ZA% a "%TEMP_PK3%" -bso0 -bsp1 -bse0 -tzip -r -mx0 -- *
+	) ELSE (
+		REM # use maximum compression (for a standard zip file)
+		SET REPACK_PK3=%BIN_7ZA% a "%TEMP_PK3%" -bso0 -bsp1 -bse0 -tzip -r -mx9 -mfb258 -mpass15 -- *
+	)
+	
+	%REPACK_PK3%
+	IF ERRORLEVEL 1 (
+		CALL :log_echo
+		CALL :log_echo "ERROR: Could not repack the PK3."
+		CALL :log_echo
+		
+		%REPACK_PK3%
+		
+		POPD
+		EXIT /B 1
+	)
+	
+	REM # display the original file size before replacing with the new one
+	CALL :display_status_left "%~f1"
+	
+	REM # replace the original PK3 file with the new one
+	COPY /Y "%TEMP_PK3%" "%~f1"  >NUL 2>&1
+	IF ERRORLEVEL 1 (
+		CALL :display_status_msg "! error <copy>"
+		CALL :log_echo
+		CALL :log_echo "ERROR: Could not replace the original PK3 with the new version."
+		CALL :log_echo
+		POPD
+		EXIT /B 1
+	)
+	
+	REM # deflopt the PK3:
+	REM # no need to deflopt the PK3 if it's uncompressed!
+	IF %ZSTORE% EQU 1 GOTO :optimize_pk3__end
+	
+	REM # running deflopt can shave a few more bytes off of any DEFLATE-based content
+	%BIN_DEFLOPT% /a "%~f1"  >NUL 2>&1
+	REM # if that errored we won't cache the PK3
+	SET "ERROR=%ERRORLEVEL%"
+	
+	:optimize_pk3__end
+	CALL :display_status_right "%~f1"
+	
+	REM # add the file to the hash-cache?
+	IF %ERROR% EQU 1 SET "USE_CACHE=0"
+	IF %DO_JPG% EQU 0 (
+		IF %ANY_JPG% EQU 1 SET "USE_CACHE=0"
+	)
+	IF %DO_PNG% EQU 0 (
+		IF %ANY_PNG% EQU 1 SET "USE_CACHE=0"
+	)
+	IF %DO_WAD% EQU 0 (
+		IF %ANY_WAD% EQU 1 SET "USE_CACHE=0"
+	)
+	IF %USE_CACHE% EQU 1 CALL :hash_add "%~f1"
+	
+	ENDLOCAL & EXIT /B %ERROR%
+	GOTO:EOF
+	
 :optimize_wad
 	REM # optimise the given WAD file
 	REM #
@@ -322,6 +503,8 @@ REM ============================================================================
 	REM # returns ERRORLEVEL 0 if optimisation
 	REM # succeeded, ERRORLEVEL 1 if it failed
 	REM ------------------------------------------------------------------------------------------------------------
+	REM # localise this routine so variables don't conflict
+	REM # for files within files, e.g. PK3>WAD>PNG
 	SETLOCAL
 	REM # if PNG/JPG files are being skipped but this WAD doesn't
 	REM # contain any, then we can still add the WAD to the cache
@@ -350,7 +533,7 @@ REM ============================================================================
 		CALL :display_status_msg "! error <mkdir>"
 		CALL :log_echo "==============================================================================="
 		CALL :log_echo
-		CALL :log_echo "ERROR: Could not create directory:"
+		CALL :log_echo "ERROR: Could not create temporary directory:"
 		CALL :log_echo "%TEMP_WADDIR%"
 		CALL :log_echo
 		GOTO :die
@@ -416,7 +599,7 @@ REM ============================================================================
 	REM # (the copy below uses absolute paths)
 	POPD
 	
-	REM # TODO: if no change the WAD occurred, do not copy it back nor add to the cache
+	REM # TODO: if no change the WAD occurred, do not copy it back nor re-add to the cache
 	
 	IF %ERROR% EQU 0 (
 		REM # temporary WAD has been optimized, replace the original
@@ -457,6 +640,9 @@ REM ============================================================================
 	REM #
 	REM # returns ERRORLEVEL 0 if successful, or ERRORLEVEL 1 for any failure.
 	REM # if a lump is skipped because it is not optimisable, ERRORLEVEL 0 is still returned
+	REM #
+	REM # note that through the use of `:optimize_file`, the `%ANY_*%`
+	REM # variables will be set according to file-types encountered 
 	REM ------------------------------------------------------------------------------------------------------------
 	REM # lumps of length 0 are just markers and can be skipped
 	IF "%~4" == "0"   GOTO :lump_skip
@@ -495,13 +681,6 @@ REM ============================================================================
 	
 	REM # display the split-line to indicate WAD contents
 	CALL :any_ok
-	
-	REM # if a PNG lump, mark the PK3/WAD as containing at least one PNG file;
-	REM # this will prevent the PK3/WAD file being cached if PNG files are being skipped
-	IF "%~5" == "PNG" SET "ANY_PNG=1"
-	REM # if a JPG lump, mark the PK3/WAD as containing at least one JPG file;
-	REM # this will prevent the PK3/WAD file being cached if JPG files are being skipped
-	IF "%~5" == "JPG" SET "ANY_JPG=1"
 	
 	REM # process the lump like any other file.
 	REM # if the lump has been cached, this will return "success"
@@ -581,7 +760,7 @@ REM ============================================================================
 	REM # optimise with optipng:
 	CALL :optimize_optipng "%~f1"
 	REM # if that failed:
-	IF %ERRORLEVEL% NEQ 0 (
+	IF ERRORLEVEL 1 (
 		REM # cap the status line
 		CALL :display_status_msg "! error <optipng>"
 		REM # reprint the status line for the next iteration
@@ -606,7 +785,7 @@ REM ============================================================================
 	REM # optimise with pngcrush:
 	CALL :optimize_pngcrush "%~f1"
 	REM # if that failed:
-	IF %ERRORLEVEL% NEQ 0 (
+	IF ERRORLEVEL 1 (
 		REM # cap the status line
 		CALL :display_status_msg "! error <pngcrush>"
 		REM # reprint the status line for the next iteration
@@ -618,7 +797,7 @@ REM ============================================================================
 	REM # optimise with deflopt:
 	CALL :optimize_deflopt "%~f1"
 	REM # if that failed:
-	IF %ERRORLEVEL% NEQ 0 (
+	IF ERRORLEVEL 1 (
 		REM # cap the status line
 		CALL :display_status_msg "! error <deflopt>"
 		REM # exit with error so that any containing PK3/WAD
@@ -683,7 +862,7 @@ REM ============================================================================
 	REM #
 	REM #	%1 = file-path
 	REM #
-	REM # returns ERRORLEVEL 0 if successful (or pngout not present),
+	REM # returns ERRORLEVEL 0 if successful (or pngcrush not present),
 	REM # or ERRORLEVEL 1 for an error
 	REM ------------------------------------------------------------------------------------------------------------
 	REM # skip if not present
@@ -708,7 +887,7 @@ REM ============================================================================
 	REM #
 	REM #	%1 = file-path
 	REM #
-	REM # returns ERRORLEVEL 0 if successful (or pngout not present),
+	REM # returns ERRORLEVEL 0 if successful (or deflopt not present),
 	REM # or ERRORLEVEL 1 for an error
 	REM ------------------------------------------------------------------------------------------------------------
 	REM # skip if not present
@@ -937,6 +1116,8 @@ REM ============================================================================
 	CALL :format_filesize_bytes LINE_OLD %SIZE_OLD%
 	REM # formulate the line
 	SET "STATUS_LEFT=* %LINE_NAME% %LINE_OLD% "
+	REM # move to the next line if we last printed a progress dot
+	IF %DOT% GTR 0 ECHO: & SET "DOT=0"
 	REM # output the status line (without carriage-return)
 	<NUL (SET /P "STATUS_LEFT=%STATUS_LEFT%")
 	GOTO:EOF
