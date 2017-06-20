@@ -1,6 +1,7 @@
 v2.0    ?
+-       Large improvements to speed throughout
 -       /ECHO parameter will enable ECHO throughout
-        (will tell you where syntax / expansion errors occur)
+        (helps debugging syntax / expansion errors)
 
 v1.2    21-JAN-17
 -       Fixed options not applying!

@@ -42,6 +42,14 @@ IF "%~1" == "" (
 	EXIT /B 0
 )
 
+REM # initialise some numeric variables
+SET "ERROR=0"
+SET "ANY_PNG=0"
+SET "ANY_JPG=0"
+SET "ANY_WAD=0"
+SET "ANY=0"
+SET "DOT=0"
+
 REM # default options
 SET "DO_PNG=1"
 SET "DO_JPG=1"
@@ -158,7 +166,6 @@ IF ERRORLEVEL 1 (
 	ECHO "%LOG_FILE%"
 	EXIT /B 1
 )
-SET DOT=0
 
 ECHO:
 CALL :log_echo "# doom-crusher : v%VER%"
@@ -242,9 +249,22 @@ REM ============================================================================
 	REM #
 	REM # returns ERRORLEVEL 0 if there were no errors in any of the files optimised,
 	REM # otherwise ERRORLEVEL 1 where any file could not be optimised
+	REM # 
+	REM # will set the `%ANY_*% variable according to the files
+	REM # found in the directory and sub-directories
+	REM # -- i.e.
+	REM #	`%ANY_JPG%` will be set to "1" if any file was a JPG
+	REM # 	`%ANY_PNG%` will be set to "1" if any file was a PNG
+	REM #	`%ANY_WAD%` will be set to "1" if any file was a WAD
+	REM #	`%ANY_PK3%` will be set to "1" if any file was a PK3
 	REM ------------------------------------------------------------------------------------------------------------
 	SETLOCAL
 	SET "ERROR=0"
+	SET "ANY_JPG=0"
+	SET "ANY_PNG=0"
+	SET "ANY_WAD=0"
+	SET "ANY_PK3=0"
+	
 	REM # the `FOR /R` loop works most reliably from the directory in question
 	PUSHD "%~f1"
 	REM # scan the directory given for crushable files:
@@ -253,10 +273,20 @@ REM ============================================================================
 	FOR /R "." %%Z IN (*.jpg;*.jpeg;*.png;*.wad;*.pk3;*.lmp;*.) DO CALL :optimize_dir__file "%%~fZ"
 	REM # put that thing back where it came from, or so help me
 	POPD
-	ENDLOCAL & EXIT /B %ERROR%
+	
+	REM # return if each particular file-type were encountered
+	(ENDLOCAL
+		IF %ANY_JPG% EQU 1 SET "ANY_JPG=1"
+		IF %ANY_PNG% EQU 1 SET "ANY_PNG=1"
+		IF %ANY_WAD% EQU 1 SET "ANY_WAD=1"
+		IF %ANY_PK3% EQU 1 SET "ANY_PK3=1"
+		SET "DOT=%DOT%"
+	) & 	EXIT /B %ERROR%
 	
 	:optimize_dir__file
 	CALL :optimize_file "%~f1"
+	REM # if any one file errors, we do continue with the scan
+	REM # but will pass back a final ERRORLEVEL of 1
 	IF ERRORLEVEL 1 SET "ERROR=1"
 	GOTO:EOF
 
@@ -268,87 +298,78 @@ REM ============================================================================
 	REM # returns ERRORLEVEL 0 if optimisation succeeded 
 	REM # (or file was skipped), ERRORLEVEL 1 if it failed
 	REM # 
-	REM # will set the `%ANY_*% variable according to the file optimised
+	REM # will set the `%ANY_*% variables according to the file optimised
 	REM # -- i.e.
 	REM #	`%ANY_JPG%` will be set to "1" if file is a JPG
 	REM # 	`%ANY_PNG%` will be set to "1" if file is a PNG
 	REM #	`%ANY_WAD%` will be set to "1" if file is a WAD
 	REM #	`%ANY_PK3%` will be set to "1" if file is a PK3
 	REM ------------------------------------------------------------------------------------------------------------
+	REM # localise this routine so variables don't conflict
+	REM # for files within files, e.g. PK3>WAD>PNG
+	SETLOCAL
+	SET "ERROR=0"
+	SET "ANY_JPG=0"
+	SET "ANY_PNG=0"
+	SET "ANY_WAD=0"
+	SET "ANY_PK3=0"
 	
 	REM # determine the file type
 	CALL :get_filetype "%~f1"
 	REM # if not a recognised file type, skip the file
 	IF "%TYPE%" == "" GOTO :file_skip
 	
-	REM # note the occurance of a particular file-type.
+	REM # note the occurance of a particular file-type:
 	REM # this is used to allow container files like WAD & PK3 to still
-	REM # be added to the cache when some file types are being skipped
-	IF "%TYPE%" == "jpg"  SET "ANY_JPG=1"
-	IF "%TYPE%" == "png"  SET "ANY_PNG=1"
-	IF "%TYPE%" == "wad"  SET "ANY_WAD=1"
-	IF "%TYPE%" == "pk3"  SET "ANY_PK3=1"
+	REM # be added to the cache when some file types are being skipped,
+	REM # i.e. if JPG files are being ignored and there are no JPG files
+	REM # in a PK3/WAD, then it can still be cached as fully processed
+	IF "%TYPE%" == "jpg" SET "ANY_JPG=1"
+	IF "%TYPE%" == "png" SET "ANY_PNG=1"
+	IF "%TYPE%" == "wad" SET "ANY_WAD=1"
+	IF "%TYPE%" == "pk3" SET "ANY_PK3=1"
 	REM # we skip IWADs to avoid breaking detection routines in various DOOM engines
 	REM # TODO: should show a specific skip message for IWADs?
 	IF "%TYPE%" == "iwad" GOTO :file_skip
 	
 	REM # we won't waste time hashing files that we are automatically skipping
-	IF "%TYPE%" == "jpg" (
-		IF %DO_JPG% EQU 0 GOTO :file_skip
-	)
-	IF "%TYPE%" == "png" (
-		IF %DO_PNG% EQU 0 GOTO :file_skip
-	)
-	IF "%TYPE%" == "wad" (
-		IF %DO_WAD% EQU 0 GOTO :file_skip
-	)
-	IF "%TYPE%" == "pk3" (
-		IF %DO_PK3% EQU 0 GOTO :file_skip
-	)
+	IF "%TYPE%-%DO_JPG%" == "jpg-0" GOTO :file_ignored
+	IF "%TYPE%-%DO_PNG%" == "png-0" GOTO :file_ignored
+	IF "%TYPE%-%DO_WAD%" == "wad-0" GOTO :file_ignored
+	IF "%TYPE%-%DO_PK3%" == "pk3-0" GOTO :file_ignored
 	
 	REM # check the cache
 	CALL :hash_check "%~f1"
 	REM # if in the cache, skip the file
-	REM # NOTE: if we are skipping PNG or JPG files
 	IF %ERRORLEVEL% EQU 0 GOTO :file_skip
 	
-	REM # which file type?
-	IF "%TYPE%" == "jpg"  GOTO :file_jpg
-	IF "%TYPE%" == "png"  GOTO :file_png
-	IF "%TYPE%" == "wad"  GOTO :file_wad
-	IF "%TYPE%" == "pk3"  GOTO :file_pk3
-		
-	REM # this would be an error where `:get_filetype`
-	REM # returned something other than the above
-	ECHO ERROR! `:get_filetype` return type unhandled.
-	GOTO :die
+	REM # call the sub-routine for the particular type
+	CALL :optimize_%TYPE% "%~f1"
+	REM # did that fail in some way?
+	IF ERRORLEVEL 1 SET "ERROR=1"
 	
+	SET "DOT=0"
+	REM # add the file to the hash-cache?
+	REM # TODO: do not cache the file because nothing changed? (e.g. PK3/WAD)
+	REM #       we want to avoid duplicating files in the hash-cache
+	IF %ERROR% EQU 0 CALL :hash_add "%~f1"
+	GOTO :file_return
+	
+	:file_ignored
+	REM # mark as an error so that any container (PK3/WAD) won't be cached
+	SET "ERROR=1"
 	:file_skip
+	REM # display a progress dot
 	CALL :dot
-	EXIT /B 0
-	
-	:file_jpg
-	CALL :optimize_jpg "%~f1"
-	SET "DOT=0"
-	EXIT /B %ERRORLEVEL%
-	
-	REM # PNG files:
-	:file_png
-	CALL :optimize_png "%~f1"
-	SET "DOT=0"
-	EXIT /B %ERRORLEVEL%
-	
-	REM # WAD files:
-	:file_wad
-	CALL :optimize_wad "%~f1"
-	SET "DOT=0"
-	EXIT /B %ERRORLEVEL%
-	
-	REM # PK3 files:
-	:file_pk3
-	CALL :optimize_pk3 "%~f1"
-	SET "DOT=0"
-	EXIT /B %ERRORLEVEL%
+	:file_return
+	REM # return if a particular file-type were encountered
+	(ENDLOCAL
+		IF %ANY_JPG% EQU 1 SET "ANY_JPG=1"
+		IF %ANY_PNG% EQU 1 SET "ANY_PNG=1"
+		IF %ANY_WAD% EQU 1 SET "ANY_WAD=1"
+		IF %ANY_PK3% EQU 1 SET "ANY_PK3=1"
+		SET "DOT=%DOT%"
+	) & 	EXIT /B %ERROR%
 
 :optimize_pk3
 	REM # returns ERRORLEVEL 0 if optimisation
@@ -359,14 +380,16 @@ REM ============================================================================
 	SETLOCAL
 	REM # if PNG/JPG/WAD files are being skipped but this PK3 doesn't
 	REM # contain any, then we can still add the PK3 to the cache
-	SET "ANY_PNG=0"
 	SET "ANY_JPG=0"
+	SET "ANY_PNG=0"
 	SET "ANY_WAD=0"
+	REM # technically we support PK3s within PK3s,
+	REM # but this doesn't appear in practice
+	SET "ANY_PK3=0"
 	REM # we'll avoid displaying the split-line if the PK3 doesn't contain any files we can optimise
 	SET "ANY=0"
 	
 	SET "ERROR=0"
-	SET "USE_CACHE=1"
 	
 	REM # display file name and current file size
 	CALL :display_status_left "%~f1"
@@ -407,6 +430,7 @@ REM ============================================================================
 		CALL :log_echo "==============================================================================="
 		
 		REM # redo the decompression, displaying results on screen
+		REM # TODO: should be capturing this to the log file during the first run
 		%BIN_7ZA% x -aos -o"%TEMP_PK3DIR%" -tzip -- "%~f1"
 		
 		REM # quit with error level set
@@ -419,7 +443,7 @@ REM ============================================================================
 	CALL :log_echo "  ============================================================================="
 	
 	REM # with the PK3 unpacked, we can optimise the directory like any other.
-	REM # note that this will set the `%ANY_*%` variables accordingly
+	REM # note that this will set the `%ANY_*%` variables according to which file-types are encountered
 	CALL :optimize_dir "%TEMP_PK3DIR%"
 	REM # if any individual file failed to optimize, we will repack the PK3,
 	REM # but not add it to the cache so that it will be retried in the future
@@ -477,23 +501,18 @@ REM ============================================================================
 	SET "ERROR=%ERRORLEVEL%"
 	
 	:optimize_pk3__end
+	REM # display the new file-size
 	CALL :display_status_right "%~f1"
 	
-	REM # add the file to the hash-cache?
-	IF %ERROR% EQU 1 SET "USE_CACHE=0"
-	IF %DO_JPG% EQU 0 (
-		IF %ANY_JPG% EQU 1 SET "USE_CACHE=0"
-	)
-	IF %DO_PNG% EQU 0 (
-		IF %ANY_PNG% EQU 1 SET "USE_CACHE=0"
-	)
-	IF %DO_WAD% EQU 0 (
-		IF %ANY_WAD% EQU 1 SET "USE_CACHE=0"
-	)
-	IF %USE_CACHE% EQU 1 CALL :hash_add "%~f1"
+	REM # if the PK3 contained certain file-types we are ignoring
+	REM # return an error state so that the PK3 won't be cached
+	IF "%ANY_JPG%-%DO_JPG%" == "1-0" SET "ERROR=1"
+	IF "%ANY_PNG%-%DO_PNG%" == "1-0" SET "ERROR=1"
+	IF "%ANY_WAD%-%DO_WAD%" == "1-0" SET "ERROR=1"
 	
-	ENDLOCAL & EXIT /B %ERROR%
-	GOTO:EOF
+	REM # we do not return the `%ANY_*%` variables as it is not important
+	REM # to files outside of the PK3 what file-types it contained
+	ENDLOCAL & SET "DOT=%DOT%" & EXIT /B %ERROR%
 	
 :optimize_wad
 	REM # optimise the given WAD file
@@ -516,7 +535,6 @@ REM ============================================================================
 	REM # it will *not* be cached so that it will always be retried in the future until there are no errors
 	REM # (we do not want to write off a PK3 as "done" when there are potential savings remaining)
 	SET "ERROR=0"
-	SET "USE_CACHE=1"
 	
 	REM # display file name and current file size
 	CALL :display_status_left "%~f1"
@@ -617,17 +635,14 @@ REM ============================================================================
 	IF EXIST "%TEMP_WADDIR%" RMDIR /S /Q "%TEMP_WADDIR%"  >NUL 2>&1
 	IF EXIST "%TEMP_WADDIR%" RMDIR /S /Q "%TEMP_WADDIR%"  >NUL 2>&1
 	
-	REM # add the file to the hash-cache?
-	IF %ERROR% EQU 1 SET "USE_CACHE=0"
-	IF %DO_JPG% EQU 0 (
-		IF %ANY_JPG% EQU 1 SET "USE_CACHE=0"
-	)
-	IF %DO_PNG% EQU 0 (
-		IF %ANY_PNG% EQU 1 SET "USE_CACHE=0"
-	)
-	IF %USE_CACHE% EQU 1 CALL :hash_add "%~f1"
+	REM # if the WAD contained certain file-types we are ignoring
+	REM # return an error state so that the WAD won't be cached
+	IF "%ANY_JPG%-%DO_JPG%" == "1-0" SET "ERROR=1"
+	IF "%ANY_PNG%-%DO_PNG%" == "1-0" SET "ERROR=1"
 	
-	ENDLOCAL & EXIT /B %ERROR%
+	REM # we do not return the `%ANY_*%` variables as it is not important
+	REM # to files outside of the WAD what file-types it contained
+	ENDLOCAL & SET "DOT=%DOT%" & EXIT /B %ERROR%
 
 :optimize_lump
 	REM # optimize a WAD lump
