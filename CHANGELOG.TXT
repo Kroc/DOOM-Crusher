@@ -1,6 +1,8 @@
 v2.0    ?
 -       Large improvements to speed throughout
--       /ECHO parameter will enable ECHO throughout
+-       Fixes for file and lump names containing special characters
+-       Added /NOCACHE option to always process files
+-       /ECHO option will enable ECHO throughout
         (helps debugging syntax / expansion errors)
 
 v1.2    21-JAN-17
