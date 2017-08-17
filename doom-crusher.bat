@@ -650,10 +650,10 @@ REM ============================================================================
 	IF "%LUMP_TYPE%-%DO_PNG%" == "PNG-0" GOTO :lump_skip
 	
 	REM # extract fields from the lumpmod record:
-	SET "LUMP_ID=!LUMPINFO:~0,5!"
-	SET "LUMP_NAME=!LUMPINFO:~6,10!"
+	SET LUMP_ID=!LUMPINFO:~0,5!
+	SET LUMP_NAME=!LUMPINFO:~6,10!
 	REM # remove the wrapping quotes (but not any quotes within)
-	SET "LUMP_NAME=!LUMP_NAME:1,-1!"
+	CALL :remove_quotes LUMP_NAME !LUMP_NAME!
 	
 	REM # ensure the lump name can be written to disk
 	REM # (may contain invalid file-system characters)
@@ -756,6 +756,10 @@ REM ============================================================================
 		SET ERROR=%ERROR%
 	) & EXIT /B %ERROR%
 
+:remove_quotes
+	FOR %%G IN (%2) DO SET "%1=%%~G"
+	GOTO:EOF
+	
 :optimize_jpg
 	REM # optimise the given JPG file
 	REM #
