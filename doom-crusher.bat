@@ -431,7 +431,7 @@ REM ============================================================================
 	REM # failed?
 	IF ERRORLEVEL 1 (
 		CALL :display_status_msg "! error <mkdir>"
-		CALL :log_echo "==============================================================================="
+		CALL :log_echo "###############################################################################"
 		CALL :log_echo
 		CALL :log_echo "ERROR: Could not create temporary directory:"
 		CALL :log_echo "%TEMP_PK3DIR%"
@@ -451,7 +451,7 @@ REM ============================================================================
 	REM #	-o"..."		: output folder
 	REM #	-tzip		: assume ZIP file, despite file-extension
 	REM #	--		: stop processing switches, source-file follows
-	%BIN_7ZA% x -aos -o"%TEMP_PK3DIR%" -tzip -- %FILE%  >NUL 2>&1
+	%BIN_7ZA% x -aos -o"%TEMP_PK3DIR%" -tzip -x@"%BIN%\pk3_ignore.lst" -- %FILE%  >NUL 2>&1
 	
 	IF ERRORLEVEL 1 (
 		REM # cap the status line
@@ -460,7 +460,7 @@ REM ============================================================================
 		
 		REM # redo the decompression, displaying results on screen
 		REM # TODO: should be capturing this to the log file during the first run
-		%BIN_7ZA% x -aos -o"%TEMP_PK3DIR%" -tzip -- %FILE%
+		%BIN_7ZA% x -aos -o"%TEMP_PK3DIR%" -tzip -x@"%BIN%\pk3_ignore.lst" -- %FILE%
 		
 		REM # quit with error level set
 		SET "ERROR=1" & GOTO :optimize_pk3__return
@@ -478,7 +478,7 @@ REM ============================================================================
 	REM # but not add it to the cache so that it will be retried in the future
 	IF ERRORLEVEL 1 SET "ERROR=1"
 	
-	CALL :log_echo "==============================================================================="
+	CALL :log_echo "  ============================================================================="
 	
 	REM # repack the PK3:
 	REM # switch to the temporary directory so that the PK3 files are
@@ -490,10 +490,10 @@ REM ============================================================================
 	REM #          compression of multiple PK3s together in 7Zip / WinRAR when using a large (128+MB) dictionary
 	IF %ZSTORE% EQU 1 (
 		REM # use no compression
-		SET REPACK_PK3=%BIN_7ZA% a "%TEMP_PK3%" -bso0 -bsp1 -bse0 -tzip -r -mx0 -- *
+		SET REPACK_PK3=%BIN_7ZA% a "%TEMP_PK3%" -bso0 -bsp1 -bse0 -tzip -r -mx0 -x@"%BIN%\pk3_ignore.lst" -- *
 	) ELSE (
 		REM # use maximum compression (for a standard zip file)
-		SET REPACK_PK3=%BIN_7ZA% a "%TEMP_PK3%" -bso0 -bsp1 -bse0 -tzip -r -mx9 -mfb258 -mpass15 -- *
+		SET REPACK_PK3=%BIN_7ZA% a "%TEMP_PK3%" -bso0 -bsp1 -bse0 -tzip -r -mx9 -mfb258 -mpass15 -x@"%BIN%\pk3_ignore.lst" -- *
 	)
 	
 	%REPACK_PK3%
@@ -529,7 +529,7 @@ REM ============================================================================
 	REM # running deflopt can shave a few more bytes off of any DEFLATE-based content
 	CALL :optimize_deflopt
 	REM # if that errored we won't cache the PK3
-	SET "ERROR=%ERRORLEVEL%"
+	IF ERRORLEVEL 1 SET "ERROR=1"
 	
 	:optimize_pk3__end
 	REM # display the new file-size
@@ -571,20 +571,36 @@ REM ============================================================================
 	REM # display file name and current file size
 	CALL :display_status_left
 	
-	REM # get the file name without losing special characters
-	FOR %%G IN (%FILE%) DO SET FILE_NAME=%%~nxG
+	REM # get the file name without special characters breaking parsing
+	FOR %%G IN (%FILE%) DO SET WAD_NAME=%%~nxG
+	REM # remove the special characters
+	SET "WAD_NAME=%WAD_NAME:!=_%"
+	SET "WAD_NAME=%WAD_NAME: =_%"
+	SET "WAD_NAME=%WAD_NAME:[=_%"
+	SET "WAD_NAME=%WAD_NAME:]=_%"
+	SET "WAD_NAME=%WAD_NAME:(=_%"
+	SET "WAD_NAME=%WAD_NAME:)=_%"
+	SET "WAD_NAME=%WAD_NAME:{=_%"
+	SET "WAD_NAME=%WAD_NAME:}=_%"
+	SET "WAD_NAME=%WAD_NAME:;=_%"
+	SET "WAD_NAME=%WAD_NAME:'=_%"
+	SET "WAD_NAME=%WAD_NAME:&=_%"
+	SET "WAD_NAME=%WAD_NAME:^=_%"
+	SET "WAD_NAME=%WAD_NAME:$=_%"
+	SET "WAD_NAME=%WAD_NAME:#=_%"
+	SET "WAD_NAME=%WAD_NAME:@=_%"
 	
 	REM # wadptr is extremely buggy and might just decide to process every WAD in the same folder even though you
 	REM # gave it a single file name. to make this process more reliable we'll set up a temporary sub-folder and
 	REM # copy the WAD into there to isolate it from other WAD files and stuff
-	SET "TEMP_WADDIR=%TEMP_DIR%\%FILE_NAME%~%RANDOM%"
-	SET "TEMP_WAD=%TEMP_WADDIR%\%FILE_NAME%"
+	SET "TEMP_WADDIR=%TEMP_DIR%\%WAD_NAME:.=_%~%RANDOM%"
+	SET TEMP_WAD="%TEMP_WADDIR%\%WAD_NAME%"
 	REM # attempt to create the temporary folder...
 	MKDIR "%TEMP_WADDIR%"  >NUL 2>&1
 	REM # failed?
 	IF ERRORLEVEL 1 (
 		CALL :display_status_msg "! error <mkdir>"
-		CALL :log_echo "==============================================================================="
+		CALL :log_echo "###############################################################################"
 		CALL :log_echo
 		CALL :log_echo "ERROR: Could not create temporary directory:"
 		CALL :log_echo "%TEMP_WADDIR%"
@@ -593,33 +609,33 @@ REM ============================================================================
 	)
 	REM # copy the WAD to the temporary directory; we could save a lot of I/O if we moved it and then moved it back
 	REM # when we were done, but if the script is stopped or crashes we don't want to misplace the original files
-	COPY /Y %FILE% "%TEMP_WAD%"  >NUL 2>&1
+	COPY /Y %FILE% %TEMP_WAD%  >NUL 2>&1
 	REM # did the copy fail?
 	IF ERRORLEVEL 1 (
 		REM # cap the status line to say that the copy errored
 		CALL :display_status_msg "! error <copy>"
-		CALL :log_echo "==============================================================================="
+		CALL :log_echo "###############################################################################"
 		CALL :log_echo
-		CALL :log_echo "ERROR: Could not copy WAD to temporary directory:"
+		CALL :log_echo "ERROR: Could not copy WAD:
+		CALL :log_echo "%FILE%"
+		CALL :log_echo
+		CALL :log_echo "to temporary copy:"
 		CALL :log_echo "%TEMP_WAD%"
 		CALL :log_echo
 		GOTO :die
 	)
 	
 	REM # list the WAD contents and get the name and length of each lump:
-	REM # (lumpmod.exe has been modified to also provide the filetype, with thanks to _mental_)
+	REM # lumpmod.exe has been modified to also provide the filetype, with thanks to _mental_.
+	REM # kroc has modified lumpmod.exe to wrap the lump name with quotes to be able to handle
+	REM # lump names containing spaces, these cannot be passed as a parameter so we have to
+	REM # pass by variable instead
+	
 	REM # NB: use of quotes in a FOR command here is fraught with complications:
 	REM #     http://stackoverflow.com/questions/22636308
-	FOR /F "tokens=1-4 eol=" %%A IN ('^" "%BIN_LUMPMOD%" "%TEMP_WAD%" list -v "^"') DO (
-		REM # NB: it's possible for a lump name to be missing! (see "jptr_v40.wad"),
-		REM #     in which case the fields are shifted along, leaving `%%D` blank
-		IF NOT "%%D" == "" (
-			REM # process the WAD lump: (extracts and optimises)
-			CALL :optimize_lump "%TEMP_WAD%" "%%A" "%%B" "%%C" "%%D"
-			REM # if processing the lump failed, do not cache the WAD
-			IF %ERRORLEVEL% GTR 0 SET "ERROR=1"
-		)
-	)
+	FOR /F "eol= delims=" %%G IN (
+		'^" %BIN_LUMPMOD% %TEMP_WAD% list -v "^"'
+	) DO SET "LUMPINFO=%%G" & CALL :optimize_lump
 	
 	REM # mark the end of WAD contents if any lump was optimised
 	IF %ANY% EQU 1 (
@@ -636,7 +652,7 @@ REM ============================================================================
 	REM # wadptr:
 	REM # 	-c	: compress
 	REM # 	-nopack	: skip sidedef packing as this can cause glitches in maps
-	%BIN_WADPTR% -c -nopack %FILE_NAME%  >NUL 2>&1
+	%BIN_WADPTR% -c -nopack "%WAD_NAME%"  >NUL 2>&1
 	REM # if this errors, the WAD won't have been changed so we can continue
 	IF ERRORLEVEL 1 (
 		REM # cap the status line to say that wadptr errored,
@@ -657,12 +673,12 @@ REM ============================================================================
 	IF %ERROR% EQU 0 (
 		REM # temporary WAD has been optimized, replace the original
 		REM # (if this were to error just continue with the clean-up)
-		COPY /Y "%TEMP_WAD%" %FILE%  >NUL 2>&1
+		COPY /Y %TEMP_WAD% %FILE%  >NUL 2>&1
 		IF ERRORLEVEL 1 (
 			CALL :log_echo
 			CALL :log_echo "ERROR: Could not replace the original WAD with the new version."
 			CALL :log_echo
-			ENDLOCAL & SET "DOT=%DOT%" & EXIT /B 1
+			ENDLOCAL & SET "DOT=0" & EXIT /B 1
 		)
 	)
 	
@@ -678,15 +694,12 @@ REM ============================================================================
 	REM # we do not return the `ANY_*` variables as it is not important
 	REM # to files outside of the WAD what file-types it contained
 	ENDLOCAL & SET "DOT=0" & EXIT /B %ERROR%
-
+	
 :optimize_lump
 	REM # optimize a WAD lump
 	REM #
-	REM #	%1 = path of WAD file
-	REM #	%2 = lump ID
-	REM #	%3 = lump name
-	REM #	%4 = lump size (in bytes)
-	REM #	%5 = lump type ("PNG", "JPG" or "LMP")
+	REM #	`TEMP_WAD` contains the path of the source wad file
+	REM #	`LUMPINFO` contains a lump record from lumpmod.exe
 	REM #
 	REM # returns ERRORLEVEL 0 if successful, or ERRORLEVEL 1 for any failure.
 	REM # if a lump is skipped because it is not optimisable, ERRORLEVEL 0 is still returned
@@ -694,48 +707,76 @@ REM ============================================================================
 	REM # note that through the use of `:optimize_file`, the `ANY_*`
 	REM # variables will be set according to file-types encountered 
 	REM ------------------------------------------------------------------------------------------------------------
+	SETLOCAL ENABLEDELAYEDEXPANSION
+	SET "ERROR=0"
+	
+	REM # extract size of lump in bytes from record
+	SET "LUMP_SIZE=!LUMPINFO:~17,9!"
 	REM # lumps of length 0 are just markers and can be skipped
-	IF "%~4" == "0"   GOTO :lump_skip
+	IF "%LUMP_SIZE%" == "0"   GOTO :lump_skip
+	
+	REM # extract lump data type from record ("PNG", "JPG" or "LMP")
+	SET "LUMP_TYPE=!LUMPINFO:~27,3!"
 	REM # only process JPG or PNG lumps
-	IF "%~5" == "LMP" GOTO :lump_skip
+	IF "%LUMP_TYPE%" == "LMP" GOTO :lump_skip
+	REM # are we ignoring JPG / PNGs?
+	IF "%LUMP_TYPE%-%DO_JPG%" == "JPG-0" GOTO :lump_skip
+	IF "%LUMP_TYPE%-%DO_PNG%" == "PNG-0" GOTO :lump_skip
+	
+	REM # extract fields from the lumpmod record:
+	SET "LUMP_ID=!LUMPINFO:~0,5!"
+	SET "LUMP_NAME=!LUMPINFO:~6,10!"
+	REM # remove the wrapping quotes (but not any quotes within)
+	SET "LUMP_NAME=!LUMP_NAME:1,-1!"
 	
 	REM # ensure the lump name can be written to disk
 	REM # (may contain invalid file-system characters)
 	REM # TODO : handle astrisk, very difficult to do properly
-	SET "LUMP=%~3"
-	SET "LUMP=%LUMP: =_%"
-	SET "LUMP=%LUMP:.=_%"
-	SET "LUMP=%LUMP:[=_%"
-	SET "LUMP=%LUMP:]=_%"
-	SET "LUMP=%LUMP:(=_%"
-	SET "LUMP=%LUMP:)=_%"
-	SET "LUMP=%LUMP:{=_%"
-	SET "LUMP=%LUMP:}=_%"
-	SET "LUMP=%LUMP:<=_%"
-	SET "LUMP=%LUMP:>=_%"
-	SET "LUMP=%LUMP::=_%"
-	SET "LUMP=%LUMP:;=_%"
-	SET 'LUMP=%LUMP:"=_%'
-	SET "LUMP=%LUMP:/=_%"
-	SET "LUMP=%LUMP:\=_%"
-	SET "LUMP=%LUMP:|=_%"
-	SET "LUMP=%LUMP:?=_%"
-	SET "LUMP=%LUMP:!=_%"
-	SET "LUMP=%LUMP:&=_%"
-	SET "LUMP=%LUMP:^=_%"
-	SET "LUMP=%LUMP:$=_%"
-	SET "LUMP=%LUMP:#=_%"
-	SET "LUMP=%LUMP:@=_%"
+	SET "FILE=!LUMP_NAME!"
+	SET "FILE=%FILE:<=_%"
+	SET "FILE=%FILE:>=_%"
+	SET "FILE=%FILE: =_%"
+	SET "FILE=%FILE:.=_%"
+	SET "FILE=%FILE:[=_%"
+	SET "FILE=%FILE:]=_%"
+	SET "FILE=%FILE:(=_%"
+	SET "FILE=%FILE:)=_%"
+	SET "FILE=%FILE:{=_%"
+	SET "FILE=%FILE:}=_%"
+	SET "FILE=%FILE::=_%"
+	SET "FILE=%FILE:;=_%"
+	SET 'FILE=%FILE:"=_%'
+	SET "FILE=%FILE:/=_%"
+	SET "FILE=%FILE:\=_%"
+	SET "FILE=%FILE:|=_%"
+	SET "FILE=%FILE:?=_%"
+	SET "FILE=%FILE:!=_%"
+	SET "FILE=%FILE:&=_%"
+	SET "FILE=%FILE:^=_%"
+	SET "FILE=%FILE:$=_%"
+	SET "FILE=%FILE:#=_%"
+	SET "FILE=%FILE:@=_%"
 	REM # this is where the lump will go
-	SET "LUMP=%TEMP_DIR%\%LUMP%.%~5"
+	SET FILE="%TEMP_DIR%\%FILE%.%LUMP_TYPE%"
 	
 	REM # extract the lump to disk to optimize it
-	%BIN_LUMPMOD% "%~f1" extract "%~3" "%LUMP%"  >NUL 2>&1
-	REM # only continue if this succeeded
+	%BIN_LUMPMOD% %TEMP_WAD% extract "!LUMP_NAME!" %FILE%  >NUL 2>&1
+	REM # only continue if this succeeded:
+	REM # (do not allow a containing PK3/WAD file to be cached)
+	REM # TODO: display the file status line to show a lumpmod error?
 	IF ERRORLEVEL 1 (
-		REM # do not allow a containing PK3/WAD file to be cached
-		REM # TODO: display the file status line to show a lumpmod error?
-		EXIT /B 1
+		REM # since the lump has not actually been processed yet,
+		REM # its name isn't on screen
+		CALL :display_status_left
+		CALL :display_status_msg "! error <lumpmod>"
+		CALL :log_echo
+		CALL :log_echo "ERROR: Could not extract lump:"
+		CALL :log_echo "!LUMP_NAME!"
+		CALL :log_echo
+		CALL :log_echo "From WAD:"
+		CALL :log_echo "!TEMP_WAD!"
+		CALL :log_echo
+		GOTO :lump_error
 	)
 	
 	REM # display the split-line to indicate WAD contents
@@ -743,27 +784,31 @@ REM ============================================================================
 	
 	REM # process the lump like any other file.
 	REM # if the lump has been cached, this will return "success"
-	SETLOCAL
-	SET "FILE=%LUMP%"
 	CALL :optimize_file
 	REM # return failure of optimisation
-	IF ERRORLEVEL 1 ENDLOCAL & EXIT /B 1
-	ENDLOCAL
+	IF ERRORLEVEL 1 GOTO :lump_error
 	
 	REM # was the lump omptimized?
-	REM # (the orginal lump size is already in `%4`)
-	FOR %%G IN ("%LUMP%") DO SET LUMP_SIZE=%%~zG
+	REM # (the orginal lump size is already in `LUMP_SIZE`)
+	FOR %%G IN (%FILE%) DO SET NEWSIZE=%%~zG
 	REM # compare sizes; if not smaller, leave the original file
-	IF %LUMP_SIZE% GEQ %~4 EXIT /B 0
+	IF %NEWSIZE% GEQ %LUMP_SIZE% GOTO :lump_return
 	
 	REM # put the lump back into the WAD
-	%BIN_LUMPMOD% "%~f1" update "%~3" "%LUMP%"  >NUL 2>&1
+	%BIN_LUMPMOD% %TEMP_WAD% update "!LUMP_NAME!" %FILE%  >NUL 2>&1
 	REM # if that errored we won't cache the WAD
-	IF ERRORLEVEL 1 EXIT /B 1
-	
-	REM # the lump was optimised and re-inserted into the WAD,
-	REM # exit successful
-	EXIT /B 0
+	IF ERRORLEVEL 1 (
+		CALL :log_echo
+		CALL :log_echo 'ERROR: Could not update lump: "!LUMP_NAME!" in file:'
+		CALL :log_echo '!FILE!'
+		CALL :log_echo
+		CALL :log_echo "Into WAD file:"
+		CALL :log_echo '!TEMP_WAD!'
+		CALL :log_echo
+		GOTO :lump_error
+	)
+	REM # exit with the result
+	GOTO :lump_return
 	
 	:lump_skip
 	REM # the lump can't/won't be optimized, show a dot on screen to demonstrate progress:
@@ -771,8 +816,19 @@ REM ============================================================================
 	IF %ANY% EQU 0 CALL :any_ok
 	REM # display a dot (and manage line-wrapping)
 	CALL :dot
-	REM # return no error
-	EXIT /B 0
+	GOTO :lump_return
+	
+	:lump_error
+	SET ERROR=1
+	:lump_return
+	REM # return our error-state
+	(ENDLOCAL
+		SET "ANY=%ANY%"
+		SET "DOT=%DOT%"
+		REM # for convenience we set the error variable of the parent,
+		REM # minimizing the FOR ... DO complexity
+		SET "ERROR=%ERROR%"
+	) & EXIT /B %ERROR%
 
 :optimize_jpg
 	REM # optimise the given JPG file
@@ -1164,7 +1220,7 @@ REM ============================================================================
 	REM # get a file size (in bytes):
 	REM #
 	REM #	`FILE`	= the desired file-path
-	REM # 	%1	= variable name to set
+	REM # 	1	= variable name to set
 	REM ------------------------------------------------------------------------------------------------------------
 	FOR %%G IN (%FILE%) DO SET "%~1=%%~zG"
 	GOTO:EOF

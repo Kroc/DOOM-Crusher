@@ -1,8 +1,8 @@
                         WADPTR - WAD Compressor
-                             Version 2.3
+                             Version 2.4
                    By Simon Howard and Andreas Dehmel
 
-         Copyright(C) 1998-2001 Simon Howard, Andreas Dehmel
+         Copyright(C) 1998-2011 Simon Howard, Andreas Dehmel
 
       This program is available for distributions under the terms of
       the GNU General Public License Version 2, as published by the
@@ -298,6 +298,10 @@ your IWAD).
 [3-1] Version history
 ---------------------
 
+v2.4    -     (2011-08-05) Fixes from Jan Engelhardt:
+                - fix 64-bit compilation.
+                - fix progress bar.
+                - add .spec file for RPM build.
 18/7/2001 -   Re-released under the GPL.
 v2.3    -     Enhancements by Andreas Dehmel <dehmel@forwiss.tu-muenchen.de>.
               Removal of another limit, slightly better graphic squashing.
@@ -334,9 +338,9 @@ v1.1    -     Original release, only options are '-list',
 -------------------------------
 
 I can be e-mailed on the Internet at:
-        fraggle@alkali.org
+        fraggle@gmail.com
 Also, check out my homepage at:
-        http://fraggle.alkali.org/
+        http://www.soulsphere.org/
 Updates and bug fixes of WADPTR will be placed here if
 neccesary.
 

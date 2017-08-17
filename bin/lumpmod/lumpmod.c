@@ -574,6 +574,7 @@ int main(int argc, char *argv[]) {
         case C_LIST: {
             struct lumplist *curlump;
             int verbose = 0, i = 0;
+	    char lumpname_quotes[11];
 
             /* Parse options: -v */
             while(numparams > 0) {
@@ -602,8 +603,9 @@ int main(int argc, char *argv[]) {
                         else if(data[0] == 0xFF && data[1] == 0xD8 
                                 && data[2] == 0xFF)
                             format = "JPG";
-                    printf("%5i %-8s %7li %s\n", i,
-                        get_lump_name(curlump->cl), curlump->cl->len, format);
+		    // kroc: wrap the name in quotes
+		    sprintf(lumpname_quotes, "\"%s\"", get_lump_name(curlump->cl));
+                    printf("%5i %-10s %9li %s\n", i, lumpname_quotes, curlump->cl->len, format);
                 }
                 else printf("%s\n", get_lump_name(curlump->cl));
             }

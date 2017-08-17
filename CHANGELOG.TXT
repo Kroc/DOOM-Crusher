@@ -1,6 +1,10 @@
 v2.0    ?
--       Large improvements to speed throughout
--       Fixes for file and lump names containing special characters
+-       Complete rewrite
+-       Fixes for file and lump names containing special characters,
+        especially spaces
+-       WadPtr has been updated to 2.4, improves reliability with large WADs
+-       "Thumbs.db", "Desktop.ini", ".git*" and ".DS_STORE" files
+        are always ignored / removed from PK3 files
 -       Added /NOCACHE option to always process files
 -       /ECHO option will enable ECHO throughout
         (helps debugging syntax / expansion errors)
