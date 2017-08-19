@@ -332,7 +332,7 @@ REM ============================================================================
 	REM # get the new file-size, post optimisation
 	FOR %%G IN (%FILE%) DO SET FILESIZE_NEW=%%~zG
 	REM # file increased in size?
-	IF %FILESIZE_NEW% GTR %FILESIZE_OLD% GOTO :file_return 
+	IF %FILESIZE_NEW% GTR %FILESIZE_OLD% GOTO :file_return
 	
 	REM # file has changed, add to the cache
 	CALL :hash_add
@@ -596,9 +596,6 @@ REM ============================================================================
 		CALL :display_status_msg "! error <wadptr>"
 		REM # note error state so that the WAD will not be cached
 		SET ERROR=1
-	) ELSE (
-		REM # cap status line with the new file size
-		CALL :display_status_right
 	)
 	REM # can leave the directory now
 	REM # (the copy below uses absolute paths)
@@ -611,10 +608,14 @@ REM ============================================================================
 		REM # (if this were to error just continue with the clean-up)
 		COPY /Y %TEMP_WAD% %FILE%  >NUL 2>&1
 		IF ERRORLEVEL 1 (
+			CALL :display_status_msg "! error <copy>"
 			CALL :log_echo
 			CALL :log_echo "ERROR: Could not replace the original WAD with the new version."
 			CALL :log_echo
 			ENDLOCAL & SET DOT=0 & EXIT /B 1
+		) ELSE (
+			REM # cap status line with the new file size
+			CALL :display_status_right
 		)
 	)
 	
@@ -694,7 +695,7 @@ REM ============================================================================
 		REM # since the lump has not actually been processed yet,
 		REM # its name isn't on screen
 		CALL :display_status_left
-		CALL :display_status_msg "! error <lumpmod>"
+		CALL :display_status_msg "^! error <lumpmod>"
 		CALL :log_echo
 		CALL :log_echo "ERROR: Could not extract lump:"
 		CALL :log_echo "!LUMP_NAME!"
