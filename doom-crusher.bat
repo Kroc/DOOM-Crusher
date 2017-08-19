@@ -1188,6 +1188,7 @@ REM ============================================================================
 	REM # get the updated file size
 	FOR %%G IN (%FILE%) DO SET SIZE_NEW=%%~zG
 	REM # no change in size?
+	REM # do not log same-size messages, they can greatly bloat the log
 	IF %SIZE_NEW% EQU %SIZE_OLD% (
 		SET "STATUS_RIGHT==  0%% : same size"
 		GOTO :display_status_right__echo
@@ -1202,11 +1203,11 @@ REM ============================================================================
 	CALL :format_filesize_bytes LINE_NEW %SIZE_NEW%
 	REM # formulate the line
 	SET "STATUS_RIGHT=%SAVED%%% = %LINE_NEW% "
+	REM # output the remainder of the status line and log the complete status line
+	CALL :log "%STATUS_LEFT%%STATUS_RIGHT%"
 	
 	:display_status_right__echo
-	REM # output the remainder of the status line and log the complete status line
 	ECHO %STATUS_RIGHT%
-	CALL :log "%STATUS_LEFT%%STATUS_RIGHT%"
 	SET DOT=0
 	GOTO:EOF
 	
