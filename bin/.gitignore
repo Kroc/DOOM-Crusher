@@ -9,3 +9,7 @@ cache/**
 
 # ignore the log file we generate
 log*.txt
+
+# ignore some temporary files
+pngcrush_*.opt
+pngcrush_*.png

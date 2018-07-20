@@ -27,8 +27,8 @@ IF "%~1" == "" (
 	ECHO:	 
 	ECHO     /NOPNG   : Skip processing PNG files
 	ECHO     /NOJPG   : Skip processing JPG files
-	ECHO     /NOWAD   : Skip processing WAD files
-	ECHO     /NOPK3   : Skip processing PK3 files
+	ECHO     /NOWAD   : Skip processing WAD/IWAD files
+	ECHO     /NOPK3   : Skip processing PK3/IPK3 files
 	ECHO:
 	ECHO     /ZSTORE  : Use no compression when re-packing PK3s.
 	ECHO                Whilst the PK3 file will be larger than before,
@@ -213,6 +213,9 @@ IF ERRORLEVEL 1 (
 	EXIT /B 1
 )
 
+REM # we'll change the window title during processing
+SET "TITLE=doom-crusher.bat"
+TITLE %TITLE%
 
 REM # process parameter list:
 REM ====================================================================================================================
@@ -230,7 +233,6 @@ IF /I "%ATTR:~0,1%" == "d" (
 )
 
 :param_next
-REM --------------------------------------------------------------------------------------------------------------------
 REM # is there another parameter?
 SHIFT
 IF NOT "%~1" == "" GOTO :params
@@ -245,6 +247,8 @@ IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
 IF EXIST "%TEMP_DIR%" RMDIR /S /Q "%TEMP_DIR%"  >NUL 2>&1
 
 PAUSE
+REM # clear the title
+TITLE %COMSPEC%
 EXIT /B 0
 
 	
@@ -268,7 +272,7 @@ REM ============================================================================
 	REM # scan the directory given for crushable files:
 	REM # note that "*." is a special term to select all files *without* an extension,
 	REM # but will also pick up files that begin with a dot (e.g. ".gitignore")
-	FOR /R "." %%G IN (*.jpg;*.jpeg;*.png;*.wad;*.pk3;*.lmp;*.) DO (
+	FOR /R "." %%G IN (*.jpg;*.jpeg;*.png;*.wad;*.iwad;*.pk3;*.ipk3;*.lmp;*.) DO (
 		SET FILE="%%G"
 		CALL :optimize_dir__file
 	)
@@ -300,13 +304,16 @@ REM ============================================================================
 	REM # for files within files, e.g. PK3>WAD>PNG
 	SETLOCAL
 	SET ERROR=0
+	REM # remember the current title to return to afterwards;
+	REM # this allows us to easily display nested file names
+	SET "OLDTITLE=%TITLE%"
 	
 	REM # determine the file type
 	CALL :get_filetype
 	REM # if not a recognised file type, skip the file
 	IF "%TYPE%" == "" GOTO :file_skip
 	
-	REM # we skip IWADs to avoid breaking detection routines in various DOOM engines
+	REM # we skip (classic) IWADs to avoid breaking detection routines in various DOOM engines
 	REM # TODO: should show a specific skip message for IWADs?
 	IF "%TYPE%" == "iwad" GOTO :file_skip
 	
@@ -322,7 +329,11 @@ REM ============================================================================
 	IF %ERRORLEVEL% EQU 0 GOTO :file_skip
 	
 	REM # get the current file-size before optimisation
-	FOR %%G IN (%FILE%) DO SET FILESIZE_OLD=%%~zG
+	FOR %%G IN (%FILE%) DO (
+		SET FILESIZE_OLD=%%~zG
+		SET "TITLE=%TITLE% : %%~nxG"
+	)
+	TITLE %TITLE%
 	
 	REM # call the sub-routine for the particular type
 	CALL :optimize_%TYPE%
@@ -345,6 +356,8 @@ REM ============================================================================
 	REM # display a progress dot
 	CALL :dot
 	:file_return
+	REM # restore the title to its previous value
+	TITLE %OLDTITLE%
 	(ENDLOCAL
 		REM # this variable needs to remain "global"
 		SET DOT=%DOT%
@@ -362,7 +375,8 @@ REM ============================================================================
 	REM # for files within files, e.g. PK3>WAD>PNG
 	SETLOCAL
 	SET ERROR=0
-	REM # we'll avoid displaying the split-line if the PK3 doesn't contain any files we can optimise
+	REM # we'll avoid displaying the split-line if the PK3
+	REM # doesn't contain any files we can optimise
 	SET ANY=0
 	
 	REM # display file name and current file size
@@ -561,6 +575,11 @@ REM ============================================================================
 		GOTO :die
 	)
 	
+	REM # files within files will show a heirarchy in the window title
+	SET "OLDTITLE=%TITLE%"
+	SET "TITLE=%TITLE% : "
+	TITLE %TITLE%
+	
 	REM # list the WAD contents and get the name and length of each lump:
 	REM # lumpmod.exe has been modified to also provide the filetype, with thanks to _mental_.
 	REM # kroc has modified lumpmod.exe to wrap the lump name with quotes to be able to handle
@@ -578,6 +597,8 @@ REM ============================================================================
 		CALL :log_echo "  -----------------------------------------------------------------------------"
 		CALL :display_status_left
 	)
+	
+	TITLE %OLDTITLE%
 	
 	REM # use wadptr to optimize a WAD:
 	
@@ -967,6 +988,8 @@ REM ============================================================================
 	IF /I "%EXT%" == ".jpeg" SET "TYPE=jpg" & GOTO:EOF
 	IF /I "%EXT%" == ".png"  SET "TYPE=png" & GOTO:EOF
 	IF /I "%EXT%" == ".pk3"  SET "TYPE=pk3" & GOTO:EOF
+	IF /I "%EXT%" == ".ipk3" SET "TYPE=pk3" & GOTO:EOF
+	IF /I "%EXT%" == ".iwad" SET "TYPE=wad" & GOTO:EOF
 	
 	REM # files with "lmp" exetension or no extension at all must be examined to determine their type,
 	REM # and WAD files must be examined to separate IWADs and PWADs
@@ -1287,3 +1310,5 @@ REM ============================================================================
 
 REM ====================================================================================================================
 :die
+REM # clear the title
+TITLE %COMSPEC%
