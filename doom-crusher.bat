@@ -567,10 +567,10 @@ REM ============================================================================
 		CALL :log_echo "###############################################################################"
 		CALL :log_echo
 		CALL :log_echo "ERROR: Could not copy WAD:
-		CALL :log_echo "%FILE%"
+		CALL :log_echo %FILE%
 		CALL :log_echo
 		CALL :log_echo "to temporary copy:"
-		CALL :log_echo "%TEMP_WAD%"
+		CALL :log_echo %TEMP_WAD%
 		CALL :log_echo
 		GOTO :die
 	)
@@ -617,6 +617,9 @@ REM ============================================================================
 		CALL :display_status_msg "! error <wadptr>"
 		REM # note error state so that the WAD will not be cached
 		SET ERROR=1
+
+		%BIN_WADPTR% -c -nopack "%WAD_NAME%"
+		PAUSE
 	)
 	REM # can leave the directory now
 	REM # (the copy below uses absolute paths)
@@ -834,7 +837,7 @@ REM ============================================================================
 		REM # reprint the status line for the next iteration
 		CALL :display_status_left
 		REM # if any of the PNG tools fail, do not add the file to the cache
-		SET ERROR=1
+		REM SET ERROR=1
 	)
 	
 	REM # optimise with pngout:
@@ -846,7 +849,7 @@ REM ============================================================================
 		REM # reprint the status line for the next iteration
 		CALL :display_status_left
 		REM # if any of the PNG tools fail, do not add the file to the cache
-		SET ERROR=1
+		REM SET ERROR=1
 	)
 	
 	REM # optimise with pngcrush:
@@ -858,7 +861,7 @@ REM ============================================================================
 		REM # reprint the status line for the next iteration
 		CALL :display_status_left
 		REM # if any of the PNG tools fail, do not add the file to the cache
-		SET ERROR=1
+		REM SET ERROR=1
 	)
 	
 	REM # optimise with deflopt:
@@ -869,7 +872,7 @@ REM ============================================================================
 		CALL :display_status_msg "! error <deflopt>"
 		REM # exit with error so that any containing PK3/WAD
 		REM # is not written off as permenantly "done"
-		SET ERROR=1
+		REM SET ERROR=1
 	) ELSE (
 		REM # cap status line with the new file size
 		CALL :display_status_right
