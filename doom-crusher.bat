@@ -1296,9 +1296,9 @@ REM ============================================================================
 	FOR %%G IN (%FILE%) DO SET SIZE_OLD=%%~zG
 	REM # get the file name without losing special characters
 	FOR %%G IN (%FILE%) DO SET FILE_NAME=%%~nxG
-	REM # prepare the status line (column is 45-wide)
-	SET "LINE_NAME=%FILE_NAME%                                             "
-	SET "LINE_NAME=%LINE_NAME:~0,45%"
+	REM # prepare the status line (column is 35-wide)
+	SET "LINE_NAME=%FILE_NAME%                                   "
+	SET "LINE_NAME=%LINE_NAME:~0,35%"
 	REM # right-align the file size
 	CALL :format_filesize_bytes LINE_OLD %SIZE_OLD%
 	REM # formulate the line
@@ -1311,8 +1311,8 @@ REM ============================================================================
 
 :display_status_right
 	REM # assuming that the left-hand status is already displayed,
-	REM # append the size-reduction in percentage and new file size,
-	REM # and output the complete status line to the log
+	REM # append the size-reduction and new file size, and output
+	REM # the complete status line to the log
 	REM #
 	REM #	`FILE` - the desired file-path
 	REM --------------------------------------------------------------------
@@ -1321,19 +1321,20 @@ REM ============================================================================
 	REM # no change in size?
 	REM # do not log same-size messages, they can greatly bloat the log
 	IF %SIZE_NEW% EQU %SIZE_OLD% (
-		SET "STATUS_RIGHT==  0%% : same size"
+		SET "STATUS_RIGHT==          0 : same size"
 		GOTO :display_status_right__echo
 	)
-	REM # calculate the perctange difference
-	CALL :get_percentage SAVED %SIZE_OLD% %SIZE_NEW%
-	SET "SAVED=   %SAVED%"
+	REM # calculate the size difference
+	CALL :get_filesize_diff SAVED %SIZE_OLD% %SIZE_NEW%
+	REM # format & right-align the size difference
+	CALL :format_filesize_bytes SAVED %SAVED%
 	REM # increase or decrease in size?
-	IF %SIZE_NEW% GTR %SIZE_OLD% SET "SAVED=+%SAVED:~-3%"
-	IF %SIZE_NEW% LSS %SIZE_OLD% SET "SAVED=-%SAVED:~-3%"
+	IF %SIZE_NEW% GTR %SIZE_OLD% SET "SAVED=+%SAVED%"
+	IF %SIZE_NEW% LSS %SIZE_OLD% SET "SAVED=-%SAVED%"
 	REM # format & right-align the new file size
 	CALL :format_filesize_bytes LINE_NEW %SIZE_NEW%
 	REM # formulate the line
-	SET "STATUS_RIGHT=%SAVED%%% = %LINE_NEW% "
+	SET "STATUS_RIGHT=%SAVED% = %LINE_NEW% "
 	REM # output the remainder of the status
 	REM # line and log the complete status line
 	CALL :log "%STATUS_LEFT%%STATUS_RIGHT%"
@@ -1362,40 +1363,26 @@ REM ============================================================================
 	CALL :log "%STATUS_LEFT%!TEXT!"
 	ENDLOCAL & SET DOT=0 & GOTO:EOF
 
-:get_percentage
+:get_filesize_diff
+	REM # calculate the difference between two file sizes
 	SETLOCAL
-	
-	REM # the largest number we can use before
-	REM # it becomes negative (equivilent to 2 GB in bytes)
-	SET /A MAXINT=2*1024*1024*1024,MAXINT-=1
-	REM # the largest number we can multiply by 100
-	REM # before it becomes too big (approx. 20.9 MB)
-	SET /A MAX100=MAXINT/100
-	
+
 	SET "OLD=%2"
 	SET "NEW=%3"
-	
-	REM # if the old number is too large, divide both
-	REM # by 1000 to bring the final calulcation within safe range
-	IF %OLD% GTR %MAX100% SET /A "OLD/=1000,NEW/=1000"
-	REM # if the new number is too large, divide both
-	REM # by 1000 to bring the final calulcation within safe range
-	IF %NEW% GTR %MAX100% SET /A "OLD/=1000,NEW/=1000"
-	
-	REM # same?
+
 	IF %OLD% EQU %NEW% (
 		REM # return 0%
 		SET /A VAL=0
 	) ELSE (
 		REM # increase or decrease?
 		IF %NEW% GTR %OLD% (
-			SET /A VAL=100*NEW/OLD
+			SET /A VAL=NEW-OLD
 		) ELSE (
-			SET /A VAL=100-100*NEW/OLD
+			SET /A VAL=OLD-NEW
 		)
 	)
-	
-	REM # return the percentage value in the variable name provided
+
+	REM # return the size difference in the variable name provided
 	ENDLOCAL & SET "%1=%VAL%"
 	GOTO:EOF
 
