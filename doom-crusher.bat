@@ -134,11 +134,11 @@ IF ERRORLEVEL 1 (
 	EXIT /B 1
 )
 
-REM # sha1deep:
+REM # program for generating and verifying checksums:
 IF %WINBIT% EQU 64 SET BIN_HASH="%BIN%\md5deep\sha1deep64.exe"
 IF %WINBIT% EQU 32 SET BIN_HASH="%BIN%\md5deep\sha1deep.exe"
 
-REM # select 7Zip executable
+REM # select 7Zip executable:
 IF %WINBIT% EQU 64 SET BIN_7ZA="%BIN%\7za\7za_x64.exe"
 IF %WINBIT% EQU 32 SET BIN_7ZA="%BIN%\7za\7za.exe"
 
@@ -152,9 +152,8 @@ REM # pngcrush:
 IF %WINBIT% EQU 64 SET BIN_PNGCRUSH="%BIN%\pngcrush\pngcrush_w64.exe"
 IF %WINBIT% EQU 32 SET BIN_PNGCRUSH="%BIN%\pngcrush\pngcrush_w32.exe"
 
-REM # deflopt:
+REM # location of the deflopt executable
 SET BIN_DEFLOPT="%BIN%\deflopt\DeflOpt.exe"
-
 REM # location of the wadptr executable
 SET BIN_WADPTR="%BIN%\wadptr\wadptr.exe"
 REM # location of the lumpmod executable
@@ -289,7 +288,10 @@ REM ============================================================================
 		SET DOT=%DOT%
 	) & 	EXIT /B %ERROR%
 	
-	:optimize_dir__file
+:optimize_dir__file
+	REM --------------------------------------------------------------------
+	REM # optimize individual file -- PK3 files will be unpacked and the
+	REM # contents optimized recursively
 	CALL :optimize_file
 	REM # if any one file errors, we do continue with the scan
 	REM # but will pass back a final ERRORLEVEL of 1
@@ -442,6 +444,10 @@ REM ============================================================================
 		CALL :display_status_msg "err!"
 		CALL :log_echo "==============================================================================="
 		
+		REM # if a PK3 file cannot be unpacked at all, add it to the
+		REM # error cache to be ignored automatically in the future
+		CALL :hash_add_error
+
 		REM # redo the decompression, displaying results on screen
 		REM # TODO: should be capturing this to the log file during the first run
 		%BIN_7ZA% x -aos -o"%TEMP_PK3DIR%" -tzip -x@"%BIN%\pk3_ignore.lst" -- %FILE%
@@ -492,6 +498,10 @@ REM ============================================================================
 		CALL :log_echo "ERROR: Could not repack the PK3."
 		CALL :log_echo
 		
+		REM # if a PK3 file cannot be repacked at all, add it to the
+		REM # error cache to be ignored automatically in the future
+		CALL :hash_add_error
+
 		%REPACK_PK3%
 		
 		POPD
@@ -508,6 +518,7 @@ REM ============================================================================
 		CALL :log_echo
 		CALL :log_echo "ERROR: Could not replace the original PK3 with the new version."
 		CALL :log_echo
+		
 		POPD
 		SET ERROR=1 & GOTO :optimize_pk3__return
 	)
@@ -610,11 +621,6 @@ REM ============================================================================
 		CALL :log_echo
 		GOTO :die
 	)
-	
-	REM # files within files will show a heirarchy in the window title
-	SET "OLDTITLE=%TITLE%"
-	SET "TITLE=%TITLE% : "
-	TITLE %TITLE%
 	
 	REM # list the WAD contents and get the name and length of each lump:
 	REM # lumpmod.exe has been modified to also provide the filetype, with
@@ -879,6 +885,7 @@ REM ============================================================================
 	REM # aware if any one stage fails
 	SETLOCAL
 	SET ERROR=0
+	SET ERRORS=0
 	
 	REM # display file name and current file size
 	CALL :display_status_left
@@ -891,9 +898,9 @@ REM ============================================================================
 		CALL :display_status_msg "! error <optipng>"
 		REM # reprint the status line for the next iteration
 		CALL :display_status_left
-		REM # if any of the PNG tools fail,
+		REM # if all of the PNG tools fail,
 		REM # do not add the file to the cache
-		REM SET ERROR=1
+		SET /A "ERRORS=ERRORS+1"
 	)
 	
 	REM # optimise with pngout:
@@ -904,9 +911,9 @@ REM ============================================================================
 		CALL :display_status_msg "! error <pngout>"
 		REM # reprint the status line for the next iteration
 		CALL :display_status_left
-		REM # if any of the PNG tools fail,
+		REM # if all of the PNG tools fail,
 		REM # do not add the file to the cache
-		REM SET ERROR=1
+		SET /A "ERRORS=ERRORS+1"
 	)
 	
 	REM # optimise with pngcrush:
@@ -917,9 +924,9 @@ REM ============================================================================
 		CALL :display_status_msg "! error <pngcrush>"
 		REM # reprint the status line for the next iteration
 		CALL :display_status_left
-		REM # if any of the PNG tools fail,
+		REM # if all of the PNG tools fail,
 		REM # do not add the file to the cache
-		REM SET ERROR=1
+		SET /A "ERRORS=ERRORS+1"
 	)
 	
 	REM # optimise with deflopt:
@@ -927,20 +934,21 @@ REM ============================================================================
 	REM # if that failed:
 	IF ERRORLEVEL 1 (
 		REM # cap the status line
+		REM # note: error of deflopt is not critical
 		CALL :display_status_msg "! error <deflopt>"
-		REM # exit with error so that any containing PK3/WAD
-		REM # is not written off as permenantly "done"
-		REM SET ERROR=1
 	) ELSE (
 		REM # cap status line with the new file size
 		CALL :display_status_right
 	)
 
-	REM # if optimisation failed, at to the error cache,
+	REM # if optimisation failed, add to the error cache.
 	REM # this can be used to ignore faulty files in the future
-	IF %ERROR% EQU 1 CALL :hash_add_error
+	IF %ERRORS% EQU 3 (
+		CALL :hash_add_error
+		SET ERROR=1
+	)
 	
-	REM # if any of the PNG passes failed, return an error state; if the
+	REM # if all of the PNG passes failed, return an error state; if the
 	REM # PNG was from a WAD or PK3 then these will *not* be cached so that
 	REM # they will always be retried in the future until there are no
 	REM # errors (we do not want to write off a WAD or PK3 as "done" when

@@ -1,5 +1,8 @@
 v2.0    ?
 -       Complete rewrite
+-       Switched to faster SHA1 checksums (existing cache files will be invalid)
+-       Files that error are added to a separate hash cache to ignore next time
+-       Recognize ".iwad" & ".ipk3" files
 -       Fixes for file and lump names containing special characters,
         especially spaces
 -       WadPtr has been updated to 2.4, improves reliability with large WADs
@@ -8,6 +11,7 @@ v2.0    ?
 -       Added /NOCACHE option to always process files
 -       /ECHO option will enable ECHO throughout
         (helps debugging syntax / expansion errors)
+-       Replaced percentage diff with bytes
 
 v1.2    21-JAN-17
 -       Fixed options not applying!
