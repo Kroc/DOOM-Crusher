@@ -1,13 +1,7 @@
-# ignore everything, and only include the files we want
-*
-!.gitignore
-!.gitattributes
+# exclude anything beginning with double-underscore
+__**
 
-!bin
-
-!*.bat
-
-!README.md
-!icon.png
-
-!CHANGELOG.txt
+# ignore common OS junk files
+*.lnk
+.DS_STORE
+Thumbs.db

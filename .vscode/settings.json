@@ -1,0 +1,11 @@
+{
+    "files.encoding": "cp437",
+    "[bat]": {
+        "editor.wordWrap": "off",
+        "editor.wordWrapColumn": 80,
+        "editor.tabSize": 8,
+        "editor.rulers": [
+            80
+        ]
+    },
+}

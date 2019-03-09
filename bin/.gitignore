@@ -1,3 +1,4 @@
+# exclude anything beginning with double-underscore
 __**
 
 # cannot include the pngout executable due to license restrictions
