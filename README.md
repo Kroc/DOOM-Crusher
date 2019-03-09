@@ -6,6 +6,15 @@ Shrinks DOOM resource files: PK3s (ZIP files), WADs, PNGs & JPGs.
 
 Simply drag-n-drop any file, folder, or multiple-selection thereof on top of the "doom-crusher.bat" file and DOOM Crusher will recursively optimize anything it can recognise.
 
+Supported file-types:
+
+* JPEG & PNG images
+* ".wad" & ".iwad" files
+* ".pk3" & ".ipk3" files (most modern DOOM engines)
+* ".pke" ([Eternity])
+* ".epk" ([EDGE] / 3DGE)
+* ".kart" ([Sonic Robo Blast 2 Kart][SRB2Kart])
+
 For bugs, suggestions and feedback please either file an issue on the [GitHub](https://github.com/Kroc/DOOM-Crusher/issues) page or mail kroc@camendesign.com
 
 ## Samples: ##
@@ -20,7 +29,7 @@ For bugs, suggestions and feedback please either file an issue on the [GitHub](h
 
 JPEG files are optimized using ["jpegtran"][1]:
 
-> jpegtran works by rearranging the compressed data (DCT coefficients), without ever fully decoding the image.  Therefore, its transformations are lossless: there is no image degradation at all ...
+> jpegtran works by rearranging the compressed data (DCT coefficients), without ever fully decoding the image. Therefore, its transformations are lossless: there is no image degradation at all ...
 
 PNG files are run through a battery of optimizers:
 
@@ -29,9 +38,9 @@ PNG files are run through a battery of optimizers:
 * [Pngcrush][4]
 * [DeflOpt][5] (binary included due to original website going offline)
 
-WAD files are first optimized by [WADPTR][6]:
+WAD files are first optimized by [WADptr][6]:
 
-> WADPTR uses three separate methods to compress WAD files: lump merging, graphic squashing and side-def packing. These actually all work in quite similar ways. As well as compressing WADs, it also removes unused data in WADs (information that exists but is not part of any lump) and removes unused side-defs (side-defs that exist but are not bound to any line-def).
+> WADptr uses three separate methods to compress WAD files: lump merging, graphic squashing and side-def packing. These actually all work in quite similar ways. As well as compressing WADs, it also removes unused data in WADs (information that exists but is not part of any lump) and removes unused side-defs (side-defs that exist but are not bound to any line-def).
 
 Side-def packing is not used by DOOM-Crusher due to graphical glitches that may occur in certain WADs.
 WADs are then scanned for PNG and JPEG lumps and optimized as above.
@@ -58,3 +67,7 @@ After the contents have been optimized, the PK3 file is repacked using [7Zip][7]
 [A]: http://boa.realm667.com/
 [B]: http://forum.zdoom.org/viewtopic.php?f=19&t=52276&sid=1cdc5a0e07f76597c907dc82b9679339&start=1335
 [C]: http://www.moddb.com/mods/brutal-doom
+
+[Eternity]: https://github.com/team-eternity/eternity
+[EDGE]: https://doomwiki.org/wiki/EDGE
+[SRB2Kart]: https://mb.srb2.org/showthread.php?p=802727

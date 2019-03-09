@@ -1,4 +1,4 @@
-v2.1    ?
+v2.1    09-MAR-19
 -       Much improved detection of file-types by examination of the file-header
 -       Add recognition of ".pke" (Eternity), ".epk" (EDGE)
         and ".kart" (SRB2 Kart) file-types
@@ -10,7 +10,7 @@ v2.0    09-MAR-19
 -       Recognize ".iwad" & ".ipk3" files
 -       Fixes for file and lump names containing special characters,
         especially spaces
--       WadPtr has been updated to 2.4, improves reliability with large WADs
+-       WADPtr has been updated to 2.4, improves reliability with large WADs
 -       "Thumbs.db", "Desktop.ini", ".git*" and ".DS_STORE" files
         are always ignored / removed from PK3 files
 -       Added /NOCACHE option to always process files
@@ -40,7 +40,7 @@ v1.2    21-JAN-17
 v1.1    13-JAN-17
 -       Skip files that have already been crushed before
         (a cache of file hashes is kept in `bin\hashes.txt`)
--       WADPTR's sidedef packing is disabled to prevent glitches in maps
+-       WADptr's sidedef packing is disabled to prevent glitches in maps
 -       Added `/NOPK3` and `/NOWAD` options to ignore these types
 -       Added `/ZSTORE` option to repack the PK3s *without* compression:
         Whilst the PK3 file will be larger than before, it will boot faster.
