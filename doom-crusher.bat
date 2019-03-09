@@ -1,10 +1,10 @@
 @ECHO OFF & SETLOCAL ENABLEEXTENSIONS DISABLEDELAYEDEXPANSION
 
-REM # doom-crusher.bat : v2.0
+REM # doom-crusher.bat : v2.1
 REM ============================================================================
 REM # optimize DOOM-related files: PK3 / WAD / PNG / JPG
 
-SET "VER=2.0"
+SET "VER=2.1"
 
 REM # path of this script:
 REM # (must be done before using `SHIFT`)
