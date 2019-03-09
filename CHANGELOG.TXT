@@ -1,4 +1,4 @@
-v2.0    ?
+v2.0    09-MAR-19
 -       Complete rewrite
 -       Switched to faster SHA1 checksums (existing cache files will be invalid)
 -       Files that error are added to a separate hash cache to ignore next time
