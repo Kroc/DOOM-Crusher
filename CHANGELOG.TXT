@@ -1,5 +1,7 @@
 v2.1    ?
-
+-       Much improved detection of file-types by examination of the file-header
+-       Add recognition of ".pke" (Eternity), ".epk" (EDGE)
+        and ".kart" (SRB2 Kart) file-types
 
 v2.0    09-MAR-19
 -       Complete rewrite
@@ -31,7 +33,7 @@ v1.2    21-JAN-17
 -       Fixes and improvements to filesize and percentage reporting
 -       Added basic logging (a replica of what appears on screen), see "bin\log.txt",
         more advanced logging is planned which will capture full error details
--       Signigicantly faster WAD processing
+-       Significantly faster WAD processing
         (lumpmod modified to identify PNG/JPG lumps, with thanks to _mental_)
 -       Faster PK3 processing
 

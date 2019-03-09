@@ -2,6 +2,7 @@
 __**
 
 # ignore common OS junk files
+Desktop.ini
+Thumbs.db
 *.lnk
 .DS_STORE
-Thumbs.db

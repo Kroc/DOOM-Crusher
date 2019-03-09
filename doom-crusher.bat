@@ -28,7 +28,7 @@ IF "%~1" == "" (
 	ECHO     /NOPNG   : Skip processing PNG files
 	ECHO     /NOJPG   : Skip processing JPG files
 	ECHO     /NOWAD   : Skip processing WAD/IWAD files
-	ECHO     /NOPK3   : Skip processing PK3/IPK3 files
+	ECHO     /NOPK3   : Skip processing PK3/IPK3/PKE/EPK/KART files
 	ECHO:
 	ECHO     /ZSTORE  : Use no compression when re-packing PK3s.
 	ECHO                Whilst the PK3 file will be larger than before,
@@ -133,6 +133,9 @@ IF ERRORLEVEL 1 (
 	ECHO "%CACHEDIR%"
 	EXIT /B 1
 )
+
+REM # program for identifying file-types:
+SET BIN_FILETYPE="%BIN%\filetype\filetype.exe"
 
 REM # program for generating and verifying checksums:
 IF %WINBIT% EQU 64 SET BIN_HASH="%BIN%\md5deep\sha1deep64.exe"
@@ -275,7 +278,7 @@ REM ============================================================================
 	REM # note that "*." is a special term to select all files *without* an
 	REM # extension, but will also pick up files that begin with a dot
 	REM # (e.g. ".gitignore")
-	FOR /R "." %%G IN (*.jpg;*.jpeg;*.png;*.wad;*.iwad;*.pk3;*.ipk3;*.lmp;*.) DO (
+	FOR /R "." %%G IN (*.jpg;*.jpeg;*.png;*.wad;*.iwad;*.pk3;*.ipk3;*.pke;*.epk;*.kart;*.lmp;*.) DO (
 		SET FILE="%%G"
 		CALL :optimize_dir__file
 	)
@@ -1061,40 +1064,48 @@ REM ============================================================================
 	REM # get the file-extension from the `FILE` variable
 	FOR %%G IN (%FILE%) DO SET EXT=%%~xG
 	
-	REM # simple file extension check
-	IF /I "%EXT%" == ".jpg"  SET "TYPE=jpg" & GOTO:EOF
-	IF /I "%EXT%" == ".jpeg" SET "TYPE=jpg" & GOTO:EOF
-	IF /I "%EXT%" == ".png"  SET "TYPE=png" & GOTO:EOF
+	REM # recognize modern DOOM archive files by their extension
+	REM # rather than their file-header, since all are just renamed
+	REM # ZIP files and we don't want to process non-DOOM ".zip" files
 	IF /I "%EXT%" == ".pk3"  SET "TYPE=pk3" & GOTO:EOF
 	IF /I "%EXT%" == ".ipk3" SET "TYPE=pk3" & GOTO:EOF
+	IF /I "%EXT%" == ".pke"  SET "TYPE=pk3" & GOTO:EOF
+	IF /I "%EXT%" == ".epk"  SET "TYPE=pk3" & GOTO:EOF
+	IF /I "%EXT%" == ".kart" SET "TYPE=pk3" & GOTO:EOF
+	REM # we will process ".iwad" files as even though these are WAD files
+	REM # and not zip-files internally, they are modern and do not need
+	REM # to be preseved exactly
 	IF /I "%EXT%" == ".iwad" SET "TYPE=wad" & GOTO:EOF
+
+	REM # use filetype.exe to examine the file-header:
+	REM # we have to change to its directory for this to work
+	FOR %%G IN (%BIN_FILETYPE%) DO SET BIN_FILETYPE_PATH=%%~dpG
+	PUSHD %BIN_FILETYPE_PATH%
+
+		REM # TODO: this works only because %FILE% is assumed
+		REM #       to not contain brackets or speech-marks!
+
+		REM # NB: use of quotes in a FOR command here
+		REM #     is fraught with complications:
+		REM #     http://stackoverflow.com/questions/22636308
+		REM # NB: also, using speech-marks as delimiters:
+		REM #     https://stackoverflow.com/a/13217838
+		FOR /F eol^=^*^ tokens^=2^,4^ delims^=^(^)^" %%A IN (
+			'^" %BIN_FILETYPE% -i %FILE% ^"'
+		) DO (
+			SET "FILE_EXT=%%A"
+			SET "FILE_DESC=%%B"
+		)
+	POPD
 	
-	REM # files with "lmp" exetension or no extension at all must be
-	REM # examined to determine their type, and WAD files must be examined
-	REM # to separate IWADs and PWADs
-	SET IS_LUMP=0
-	IF /I "%EXT%" == ".wad" SET IS_LUMP=1
-	IF /I "%EXT%" == ".lmp" SET IS_LUMP=1
-	IF    "%EXT%" == ""     SET IS_LUMP=1
-	REM # if not a lump file, return blank
-	IF %IS_LUMP% EQU 0 GOTO:EOF
-	
-	REM # READ the first 1021 bytes of a file. a truly brilliant solution,
-	REM # thanks to: http://stackoverflow.com/a/7827243
-	SET "HEADER=" & SET /P HEADER=< %FILE%
-	
-	REM # sometimes these bytes can glitch the parser,
-	REM # so we delay their insertion until runtime:
-	SETLOCAL ENABLEDELAYEDEXPANSION
-	REM # a JPEG file?
-	REM # IMPORTANT: these bytes are "0xFF,0xD8"
-	IF "!HEADER:~0,2!" == "ÿØ"   ENDLOCAL & SET "TYPE=jpg"  & GOTO:EOF
-	REM # a PNG file?
-	IF "!HEADER:~1,3!" == "PNG"  ENDLOCAL & SET "TYPE=png"  & GOTO:EOF
-	REM # a PWAD file?
-	IF "!HEADER:~0,4!" == "PWAD" ENDLOCAL & SET "TYPE=wad"  & GOTO:EOF
-	REM # an IWAD file?
-	IF "!HEADER:~0,4!" == "IWAD" ENDLOCAL & SET "TYPE=iwad" & GOTO:EOF
+	REM # map the return values of the filetype program
+	IF /I "%FILE_EXT%" == ".jpg"  ENDLOCAL & SET "TYPE=jpg"  & GOTO:EOF
+	IF /I "%FILE_EXT%" == ".png"  ENDLOCAL & SET "TYPE=png"  & GOTO:EOF
+	REM # ignore IWAD files that contain IWAD in the file-header
+	REM # (a .wad extension is not enough to detect an IWAD)
+	IF /I "%FILE_DESC%" == "IWAD Archive" ENDLOCAL & SET "TYPE=iwad" & GOTO:EOF
+	REM # all other WAD files (this assumes a "PWAD Archive" description)
+	IF /I "%FILE_EXT%" == ".wad"  ENDLOCAL & SET "TYPE=wad"  & GOTO:EOF
 	REM # not a file type we deal with, return blank
 	GOTO:EOF
 
