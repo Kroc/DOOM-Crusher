@@ -6,7 +6,7 @@ Shrinks DOOM resource files: PK3s (ZIP files), WADs, PNGs & JPGs.
 
 Simply drag-n-drop any file, folder, or multiple-selection thereof on top of the "doom-crusher.bat" file and DOOM Crusher will recursively optimize anything it can recognise.
 
-For bugs, suggestions and feedback please either file an issue on the [GitHub](https://github.com/Kroc/DOOM-Crusher/issues) page or mail kroc+doom@camendesign.com
+For bugs, suggestions and feedback please either file an issue on the [GitHub](https://github.com/Kroc/DOOM-Crusher/issues) page or mail kroc@camendesign.com
 
 ## Samples: ##
 
@@ -16,7 +16,7 @@ For bugs, suggestions and feedback please either file an issue on the [GitHub](h
 | [DUMP-3.PK3][B]     |   74,526,263 B |  71.0 MB |  68,149,144 B |  64.9 MB |  -6.08 MB
 | [brutalv20b.pk3][C] |   37,046,275 B |  35.3 MB |  36,379,722 B |  34.7 MB |  -0.64 MB
 
-## Methodolody ##
+## Methodology ##
 
 JPEG files are optimized using ["jpegtran"][1]:
 
@@ -31,9 +31,9 @@ PNG files are run through a battery of optimizers:
 
 WAD files are first optimized by [WADPTR][6]:
 
-> WADPTR uses three seperate methods to compress WAD files: lump merging, graphic squashing and sidedef packing. These actually all work in quite similar ways. As well as compressing WADs, it also removes unused data in WADs (information that exists but is not part of any lump) and removes unused sidedefs (sidedefs that exist but are not bound to any linedef).
+> WADPTR uses three separate methods to compress WAD files: lump merging, graphic squashing and side-def packing. These actually all work in quite similar ways. As well as compressing WADs, it also removes unused data in WADs (information that exists but is not part of any lump) and removes unused side-defs (side-defs that exist but are not bound to any line-def).
 
-Sidedef packing is not used by DOOM-Crusher due to graphical glitches that may occure in certain WADs.
+Side-def packing is not used by DOOM-Crusher due to graphical glitches that may occur in certain WADs.
 WADs are then scanned for PNG and JPEG lumps and optimized as above.
 
 PK3 files are the WAD format used by modern DOOM engines. A PK3 file is just a renamed ZIP file. The file is unpacked and the contents are optimized as above (PK3 files can contain WAD files, which themselves can contain PNG & JPEG files).
