@@ -1,3 +1,6 @@
+v2.1.1  20-APR-19
+-       Fix LF endings in the repo making release downloads fail
+
 v2.1    09-MAR-19
 -       Much improved detection of file-types by examination of the file-header
 -       Add recognition of ".pke" (Eternity), ".epk" (EDGE)
