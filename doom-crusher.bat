@@ -1,10 +1,10 @@
 @ECHO OFF & SETLOCAL ENABLEEXTENSIONS DISABLEDELAYEDEXPANSION
 
-REM # doom-crusher.bat : v2.1
+REM # doom-crusher.bat : v2.2
 REM ============================================================================
 REM # optimize DOOM-related files: PK3 / WAD / PNG / JPG
 
-SET "VER=2.1"
+SET "VER=2.2"
 
 REM # path of this script:
 REM # (must be done before using `SHIFT`)
@@ -30,6 +30,10 @@ IF "%~1" == "" (
 	ECHO     /NOWAD   : Skip processing WAD/IWAD files
 	ECHO     /NOPK3   : Skip processing PK3/IPK3/PKE/EPK/KART files
 	ECHO:
+	ECHO     /LOSSY   : Uses additional methods to reduce file size.
+	ECHO                WARNING: PERMENANTLY REDUCES IMAGE QUALITY!
+	ECHO                Never use on an original file, always make a copy!
+	ECHO:
 	ECHO     /ZSTORE  : Use no compression when re-packing PK3s.
 	ECHO                Whilst the PK3 file will be larger than before,
 	ECHO                it will boot faster.
@@ -54,6 +58,7 @@ SET DO_PNG=1
 SET DO_JPG=1
 SET DO_WAD=1
 SET DO_PK3=1
+SET LOSSY=0
 SET ZSTORE=0
 SET CACHE=1
 
@@ -93,6 +98,13 @@ REM # use "/NOPK3" to disable PK3 processing
 IF /I "%~1" == "/NOPK3" (
 	REM # turn off PK3 processing
 	SET DO_PK3=0
+	REM # check for more options
+	SHIFT & GOTO :options
+)
+REM # use "/LOSSY" to enale lossy compression
+IF /I "%~1" == "/LOSSY" (
+	REM # enable the relevant flag
+	SET LOSSY=1
 	REM # check for more options
 	SHIFT & GOTO :options
 )
@@ -147,6 +159,9 @@ IF %WINBIT% EQU 32 SET BIN_7ZA="%BIN%\7za\7za.exe"
 
 REM # jpegtran:
 SET BIN_JPEG="%BIN%\jpegtran\jpegtran.exe"
+
+REM # pngquant
+SET BIN_PNGQUANT="%BIN%\pngquant\pngquant.exe"
 REM # optipng:
 SET BIN_OPTIPNG="%BIN%\optipng\optipng.exe"
 REM # pngout:
@@ -184,6 +199,7 @@ IF %DO_PNG% EQU 0 SET "OPTIONS=%OPTIONS%/NOPNG "
 IF %DO_JPG% EQU 0 SET "OPTIONS=%OPTIONS%/NOJPG "
 IF %DO_WAD% EQU 0 SET "OPTIONS=%OPTIONS%/NOWAD "
 IF %DO_PK3% EQU 0 SET "OPTIONS=%OPTIONS%/NOPK3 "
+IF %LOSSY%  EQU 1 SET "OPTIONS=%OPTIONS%/LOSSY "
 IF %ZSTORE% EQU 1 SET "OPTIONS=%OPTIONS%/ZSTORE "
 IF NOT DEFINED CACHE SET "OPTIONS=%OPTIONS%/NOCACHE"
 IF DEFINED OPTIONS (
@@ -893,6 +909,9 @@ REM ============================================================================
 	REM # display file name and current file size
 	CALL :display_status_left
 	
+	REM # optimise with pngquant -- lossy!
+	IF %LOSSY% EQU 1 CALL :optimize_pngquant
+
 	REM # optimise with optipng:
 	CALL :optimize_optipng
 	REM # if that failed:
@@ -958,6 +977,29 @@ REM ============================================================================
 	REM # there are potential savings remaining)
 	ENDLOCAL & SET DOT=0 & EXIT /B %ERROR%
 	
+:optimize_pngquant
+	REM # optimise a PNG file using pngquant
+	REM #
+	REM #	`FILE` - the desired file-path
+	REM #
+	REM # returns ERRORLEVEL 0 if successful (or pngquant not present),
+	REM # or ERRORLEVEL 1 for an error
+	REM --------------------------------------------------------------------
+	REM # skip if binary not present
+	IF NOT EXIST %BIN_PNGQUANT% EXIT /B 0
+
+	DEL /F "%TEMP_DIR%\pngquant-in.png"   >NUL 2>&1
+	DEL /F "%TEMP_DIR%\pngquant-out.png"  >NUL 2>&1
+
+	COPY /Y %FILE% "%TEMP_DIR%\pngquant-in.png"  >NUL
+
+	%BIN_PNGQUANT% --force --output "%TEMP_DIR%\pngquant-out.png" --quality=65-100 --skip-if-larger --speed 1 256 -- "%TEMP_DIR%\pngquant-in.png"
+
+	IF ERRORLEVEL 1 EXIT /B %ERRORLEVEL%
+
+	COPY /Y "%TEMP_DIR%\pngquant-out.png" %FILE%  >NUL
+	EXIT /B %ERRORLEVEL%
+
 :optimize_optipng
 	REM # optimise a PNG file using optipng
 	REM #
