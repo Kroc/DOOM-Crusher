@@ -1,16 +1,6 @@
 # exclude anything beginning with double-underscore
 __**
 
-# cannot include the pngout executable due to license restrictions
-pngout/pngout.exe
-
-# include the cache folder, but none of its contents
-!cache/
-cache/**
-
 # ignore the log file we generate
 log*.txt
-
-# ignore some temporary files
-pngcrush_*.opt
-pngcrush_*.png
+*.log

@@ -1,0 +1,178 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang="">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>wadptr</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    span.underline{text-decoration: underline;}
+    div.column{display: inline-block; vertical-align: top; width: 50%;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+  </style>
+  
+  <!-- Tweaks to the pandoc output style to make the resulting HTML
+       look much nicer. -->
+
+  <style>
+  body {
+      background-color: white;
+      margin-top: 1.5em;
+      margin-bottom: 4em;
+
+      max-width: 38em;
+      margin-left: auto;
+      margin-right: auto;
+      box-sizing: border-box;
+
+      padding: 0;
+      padding-left: 1.3em;
+      padding-right: 1.3em;
+
+      font-size: large;
+      color: #555;
+      line-height: 1.6;
+
+      text-align: justify;
+      overflow-wrap: break-word;
+  }
+
+  header {
+      font-family: serif;
+      margin-top: 0;
+      margin-bottom: 0.2em;
+      text-align: center;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+      margin-top: 0.5em;
+      margin-bottom: 0.2em;
+  }
+
+  p {
+      margin-top: 0;
+      margin-bottom: 0.8em;
+  }
+
+  dl {
+      margin-block-start: 0.5em;
+  }
+  </style>
+
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">wadptr</h1>
+</header>
+<h1>NAME</h1>
+<p>wadptr - compression tool for .wad files</p>
+<h1>SYNOPSIS</h1>
+<p><strong>wadptr</strong> [options] [ -c | -u | -l ] <em>wadfile...</em></p>
+<h1>DESCRIPTION</h1>
+<p><strong>wadptr</strong> is a tool for compressing Doom .wad files. It takes advantage of the structure of the WAD format and some of the lumps stored inside it to merge repeated data.</p>
+<h1>COMMAND SYNTAX</h1>
+<p>wadptr has three separate subcommands:</p>
+<dl>
+<dt><strong>-l</strong></dt>
+<dd><p>List contents of the specified WAD, showing detail about which lumps are compressed or merged with other lumps.</p>
+</dd>
+<dt><strong>-c</strong></dt>
+<dd><p>Compress the specified .wad file.</p>
+</dd>
+<dt><strong>-u</strong></dt>
+<dd><p>Uncompress the specified .wad file.</p>
+</dd>
+</dl>
+<h1>OPTIONS</h1>
+<p>wadptr has several additional options:</p>
+<dl>
+<dt><strong>-o filename.wad</strong></dt>
+<dd><p>Write the output .wad file to the given filename, instead of overwriting the original file.</p>
+</dd>
+<dt><strong>-q</strong></dt>
+<dd><p>Quiet mode. Normal output that is printed when compressing or decompressing files is suppressed, making wadptr work more like a normal Unix tool that only prints output when an error occurs.</p>
+</dd>
+<dt><strong>-nomerge</strong></dt>
+<dd><p>Disables WAD lump merging (see the <strong>compression schemes</strong> section below). Cannot be used with uncompress mode.</p>
+</dd>
+<dt><strong>-nopack</strong></dt>
+<dd><p>Disables sidedef packing (see the <strong>compression schemes</strong> section below). In uncompress mode, this disables sidedef <em>unpacking</em>.</p>
+</dd>
+<dt><strong>-nosquash</strong></dt>
+<dd><p>Disables graphic squashing (see the <strong>compression schemes</strong> section below). In uncompress mode, this disables graphic <em>unsquashing</em>.</p>
+</dd>
+<dt><strong>-nostack</strong></dt>
+<dd><p>Disables blockmap stacking (see the <strong>compression schemes</strong> section below). In uncompress mode, this disables blockmap <em>unstacking</em>.</p>
+</dd>
+<dt><strong>-extblocks</strong></dt>
+<dd><p>Enables extended BLOCKMAP size limit, for WADs targeting limit-removing source ports. This effectively doubles the limit, but the resulting lump will not work with vanilla Doom.</p>
+</dd>
+<dt><strong>-extsides</strong></dt>
+<dd><p>Enables extended sidedef count limit, for WADs targeting limit-removing source ports. This effectively doubles the limit, but the resulting lump will not work with vanilla Doom.</p>
+</dd>
+<dt><strong>-v</strong></dt>
+<dd><p>Print version number.</p>
+</dd>
+</dl>
+<h1>COMPRESSION SCHEMES</h1>
+<p>The following are some brief technical details about how wadptr's .wad file compression works:</p>
+<dl>
+<dt><strong>WAD lump merging</strong></dt>
+<dd><p>WAD files sometimes contain the same lump repeated multiple times. An example is that in <em>doom2.wad</em>, some of the music tracks are repeated for multiple levels (eg. <strong>D_ROMERO</strong> and <strong>D_ROMER2</strong>). Since the WAD directory format contains a pointer to the location of the lump within the .wad file, multiple lumps that contain the same data can be merged to point to the same data. This behavior can be disabled using the <strong>-nomerge</strong> option.</p>
+</dd>
+<dt><strong>Sidedef packing</strong></dt>
+<dd><p>Doom's levels are constructed out of lines called <em>linedefs</em>. Each linedef can have one or two <em>sidedefs</em> which contain data about which texture to show on that side of the linedef. Since it's common for many linedefs to use the same textures, these identical sidedefs can be merged and shared by multiple linedefs. This behavior can be disabled using the <strong>-nopack</strong> option.</p>
+</dd>
+<dt><strong>Graphic squashing</strong></dt>
+<dd><p>Doom's graphics format splits images into vertical columns. A table stores the offset of each column within the lump. Sometimes an image can contain the same identical column multiple times. These identical columns can be merged together and the table offsets changed to point to the same data. This compression scheme works most effectively on images that are either very simple, based on repeating patterns, or those containing flat fields of a single color. This behavior can be disabled using the <strong>-nosquash</strong> option.</p>
+</dd>
+<dt><strong>Blockmap stacking</strong></dt>
+<dd><p>A precomputed table named the blockmap is used for collision detection; it divides up each level into 128x128 blocks and indexes which lines appear in each block. Often, different blocks contain the same identical set of lines. This compression scheme saves space by merging identical blocks together. This behavior can be disabled using the <strong>-nostack</strong> option.</p>
+</dd>
+</dl>
+<p>To see an example of wadptr used in a very effective way, see miniwad, a minimalist Doom-compatible IWAD file that is less than 250KiB in size: <a href="https://github.com/fragglet/miniwad"></a></p>
+<h1>SIDEDEFS ON SPECIAL LINES</h1>
+<p>When packing sidedefs, linedefs with special types always get unique sidedefs that are not shared with any other linedefs. This is to avoid problems with animated walls, such as:</p>
+<ul>
+<li><p>Scrolling walls; if multiple scrolling wall linedefs share the same sidedef, these walls will all scroll faster than normal. Non-scrolling walls that share the same sidedef will also scroll unintentionally.</p></li>
+<li><p>Wall switches; if multiple switch lines share the same sidedef, pressing one will animate all others.</p></li>
+</ul>
+<p>wadptr's behavior is maybe excessively cautious in that it applies to any and all special lines, but since only very few linedefs in a typical level are special lines this is judged to be a reasonable tradeoff.</p>
+<p>However, if wadptr repacks the sidedefs on a level that was already packed by another, less cautious, tool, the resulting sidedefs lump may be slightly larger than the original. While counterintuitive given the purpose of the program is to make WADs smaller, this is almost certainly what you want to happen; other tools that do sidedef packing less cautiously may cause unintended visual glitches to occur.</p>
+<h1>LIMITATIONS</h1>
+<p>The <strong>-c</strong> command will compress a WAD file and the <strong>-u</strong> command can then be used to restore the original uncompressed file. However, the decompressed file may not exactly match the original file byte-for-byte. For example, some editors already pack sidedefs, and sometimes WAD files include junk data that wadptr will discard. If for some reason it's important to retain the original file, you should therefore make sure to to either back up the original file before using wadptr, or use the <strong>-o</strong> command line option to write to a different file.</p>
+<p>For compatibility reasons, wadptr's blockmap stacking is deliberately very conservative. Far more aggressive techniques can be used to shrink blockmap lumps further, particularly for large levels that run up against the blockmap size limit. If you need this, check out ZokumBSP: <a href="https://github.com/zokum-no/zokumbsp"></a></p>
+<p>Some levels are so large that it is impossible to unpack their sidedefs or unstack their blockmap without exceeding the limits of the Doom level format. If this happens when uncompressing a level, "failed" will be shown in the program output for that lump and the original (compressed) lump will be copied into the output file unchanged. The <strong>-extblocks</strong> and <strong>-extsides</strong> command line arguments can be specified to use the extended limits instead of the vanilla limits, but the resulting levels will only work in a limit-removing source port.</p>
+<p>Some level editors get confused by packed sidedefs. If your level editor has problems, use <strong>-u</strong> to uncompress the file before editing.</p>
+<h1>EXAMPLES</h1>
+<p>Here are some examples for how to invoke the program:</p>
+<dl>
+<dt>wadptr -c foo.wad</dt>
+<dd><p>Compress <strong>foo.wad</strong>, overwriting the original file.</p>
+</dd>
+<dt>wadptr -u foo.wad</dt>
+<dd><p>Uncompress <strong>foo.wad</strong>, overwriting the original file.</p>
+</dd>
+<dt>wadptr -o newfoo.wad -c foo.wad</dt>
+<dd><p>Compress <strong>foo.wad</strong> but write the resulting file to <strong>newfoo.wad</strong>.</p>
+</dd>
+</dl>
+<h1>BUG REPORTS</h1>
+<p>Bugs can be reported to the GitHub issue tracker:<br />
+<a href="https://github.com/fragglet/wadptr"></a></p>
+<h1>WWW</h1>
+<p><a href="https://soulsphere.org/projects/wadptr/"></a></p>
+<h1>SEE ALSO</h1>
+<p><strong>deutex</strong>(6), <strong>bsp</strong>(6), <strong>yadex</strong>(6), <strong>eureka</strong>(1), <strong>chocolate-doom</strong>(6)</p>
+<h1>HISTORY</h1>
+<p>wadptr was originally written in 1998 by <a href="mailto:fraggle@gmail.com">Simon Howard</a> as a command-line program for MS-DOS. Simon continues to maintain the project. The first version worked as an adjunct to <strong>deutex</strong>(6), but with the 2.x series it changed to a standalone tool. Andreas Dehmel ported the program to several different Unix systems and also to RISC OS. The source code was recently (writing in 2023) overhauled and cleaned up.</p>
+<p><a href="https://doomwiki.org/wiki/Doom"><em>Doom</em></a> is a first-person shooter (FPS) game released by id Software in 1993 that has consistently topped lists of the best video games of all time. It retains an active modding community to this day that continues to develop new levels and reinvent the game in new and amazing ways.</p>
+<h1>COPYRIGHT</h1>
+<p>Copyright © 1998-2023 Simon Howard, Andreas Dehmel</p>
+<p>This program is free software; you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation; either version 2 of the License, or (at your option) any later version.</p>
+<p>This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.</p>
+</body>
+</html>

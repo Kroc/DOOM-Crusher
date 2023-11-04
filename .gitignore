@@ -1,6 +1,10 @@
 # exclude anything beginning with double-underscore
 __**
 
+# include the cache folder, but none of its contents
+!cache/
+cache/**
+
 # ignore common OS junk files
 Desktop.ini
 Thumbs.db
