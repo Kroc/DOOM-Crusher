@@ -672,64 +672,10 @@ EXIT /B 0
 	REM # display file name and current file size
 	CALL :display_status_left
 	
-	REM # get the file name without special characters breaking parsing
-	FOR %%G IN (%FILE%) DO SET WAD_NAME=%%~nxG
-	REM # remove the special characters
-	SET "WAD_NAME=%WAD_NAME:!=_%"
-	SET "WAD_NAME=%WAD_NAME: =_%"
-	SET "WAD_NAME=%WAD_NAME:[=_%"
-	SET "WAD_NAME=%WAD_NAME:]=_%"
-	SET "WAD_NAME=%WAD_NAME:(=_%"
-	SET "WAD_NAME=%WAD_NAME:)=_%"
-	SET "WAD_NAME=%WAD_NAME:{=_%"
-	SET "WAD_NAME=%WAD_NAME:}=_%"
-	SET "WAD_NAME=%WAD_NAME:;=_%"
-	SET "WAD_NAME=%WAD_NAME:'=_%"
-	SET "WAD_NAME=%WAD_NAME:&=_%"
-	SET "WAD_NAME=%WAD_NAME:^=_%"
-	SET "WAD_NAME=%WAD_NAME:$=_%"
-	SET "WAD_NAME=%WAD_NAME:#=_%"
-	SET "WAD_NAME=%WAD_NAME:@=_%"
-
-	REM # wadptr is extremely buggy and might just decide to process every
-	REM # WAD in the same folder even though you gave it a single file
-	REM # name. to make this process more reliable we'll set up a temporary
-	REM # sub-folder and copy the WAD into there to isolate it from other
-	REM # WAD files and stuff
-	SET "TEMP_WADDIR=%TEMP_DIR%\%WAD_NAME:.=_%~%RANDOM%"
-	SET TEMP_WAD="%TEMP_WADDIR%\%WAD_NAME%"
-
-	REM # attempt to create the temporary folder...
-	MKDIR "%TEMP_WADDIR%"  >>%ERROR_LOG% 2>&1
-	REM # failed?
-	IF ERRORLEVEL 1 (
-		CALL :display_status_msg "! error [mkdir]"
-		CALL :log_echo "###############################################################################"
-		CALL :log_echo
-		CALL :log_echo "ERROR: Could not create temporary directory:"
-		CALL :log_echo "%TEMP_WADDIR%"
-		CALL :log_echo
-		GOTO :die
-	)
-	REM # copy the WAD to the temporary directory; we could save a lot of
-	REM # I/O if we moved it and then moved it back when we were done,
-	REM # but if the script is stopped or crashes we don't want to
-	REM # misplace the original files
-	COPY /Y %FILE% %TEMP_WAD%  >>%ERROR_LOG% 2>&1
-	REM # did the copy fail?
-	IF ERRORLEVEL 1 (
-		REM # cap the status line to say that the copy errored
-		CALL :display_status_msg "! error [copy]"
-		CALL :log_echo "###############################################################################"
-		CALL :log_echo
-		CALL :log_echo "ERROR: Could not copy WAD:
-		CALL :log_echo %FILE%
-		CALL :log_echo
-		CALL :log_echo "to temporary copy:"
-		CALL :log_echo %TEMP_WAD%
-		CALL :log_echo
-		GOTO :die
-	)
+	REM # when we recurse into the WAD, %FILE% will be redefined to that
+	REM # of the lump being processed; therefore take a copy of the WAD
+	REM # path to be able to return the lump to the WAD
+	SET WAD_FILE=%FILE%
 	
 	REM # if we are skipping PNGs & JPGs, then there are no resources
 	REM # inside a WAD we can process (WADs cannot contain WADs,
@@ -746,7 +692,7 @@ EXIT /B 0
 	REM # NB: use of quotes in a FOR command here is fraught with
 	REM #     complications: http://stackoverflow.com/questions/22636308
 	FOR /F "eol= delims=" %%G IN (
-		'^" %BIN_LUMPMOD% %TEMP_WAD% list -v "^"'
+		'^" %BIN_LUMPMOD% %WAD_FILE% list -v "^"'
 	) DO SET "LUMPINFO=%%G" & CALL :optimize_lump
 	
 	REM # mark the end of WAD contents if any lump was optimised
@@ -760,15 +706,9 @@ EXIT /B 0
 	REM #-------------------------------------------------------------------
 	REM # use wadptr to optimize a WAD:
 	REM #
-	REM # change to the temporary directory, wadptr is prone to choking on
-	REM # absolute/relative paths, it's best to give it a single file name
-	REM # within the current directory
-	PUSHD "%TEMP_WADDIR%"
-
-	REM # wadptr:
 	REM # 	-c	: compress
-	%BIN_WADPTR% -o "%WAD_NAME%.tmp" -c "%WAD_NAME%"  >>%ERROR_LOG% 2>&1
-	REM # if this errors, the WAD won't have been changed so we can continue
+	%BIN_WADPTR% -c %WAD_FILE%  >>%ERROR_LOG% 2>&1
+	REM # if this errors, the WAD won't have changed so we can continue
 	IF ERRORLEVEL 1 (
 		REM # cap the status line to say that wadptr errored,
 		REM # but otherwise continue
@@ -779,37 +719,13 @@ EXIT /B 0
 		REM # this can be used to ignore faulty files in the future
 		CALL :hash_add_error
 
-		%BIN_WADPTR% -o "%WAD_NAME%.tmp" -c "%WAD_NAME%"
+		REM # temp
+		%BIN_WADPTR% -c %WAD_FILE%
 		PAUSE
 	) ELSE (
-		COPY /Y "%WAD_NAME%.tmp" "%WAD_NAME%"  >>%ERROR_LOG% 2>&1
+		REM # cap status line with the new file size
+		CALL :display_status_right
 	)
-	REM # can leave the directory now
-	REM # (the copy below uses absolute paths)
-	POPD
-	
-	REM # TODO: if no change the WAD occurred,
-	REM #       do not copy it back nor re-add to the cache
-	
-	IF %ERROR% EQU 0 (
-		REM # temporary WAD has been optimized, replace the original
-		REM # (if this were to error just continue with the clean-up)
-		COPY /Y %TEMP_WAD% %FILE%  >>%ERROR_LOG% 2>&1
-		IF ERRORLEVEL 1 (
-			CALL :display_status_msg "! error [copy]"
-			CALL :log_echo
-			CALL :log_echo "ERROR: Could not replace the original WAD with the new version."
-			CALL :log_echo
-			ENDLOCAL & SET DOT=0 & EXIT /B 1
-		) ELSE (
-			REM # cap status line with the new file size
-			CALL :display_status_right
-		)
-	)
-	
-	REM # remove the temporary directory (intentional duplicate)
-	IF EXIST "%TEMP_WADDIR%" RMDIR /S /Q "%TEMP_WADDIR%"  >>%ERROR_LOG% 2>&1
-	IF EXIST "%TEMP_WADDIR%" RMDIR /S /Q "%TEMP_WADDIR%"  >>%ERROR_LOG% 2>&1
 	
 	ENDLOCAL & SET DOT=0 & EXIT /B %ERROR%
 	
@@ -817,7 +733,7 @@ EXIT /B 0
 	REM #===================================================================
 	REM # optimize a WAD lump
 	REM #
-	REM #	`TEMP_WAD` contains the path of the source wad file
+	REM #	`WAD_FILE` contains the path of the source wad file
 	REM #	`LUMPINFO` contains a lump record from lumpmod.exe
 	REM #
 	REM # returns ERRORLEVEL 0 if successful, or ERRORLEVEL 1 for any
@@ -878,7 +794,7 @@ EXIT /B 0
 	SET FILE="%TEMP_DIR%\%FILE%.%LUMP_TYPE%"
 	
 	REM # extract the lump to disk to optimize it
-	%BIN_LUMPMOD% %TEMP_WAD% extract "!LUMP_NAME!" %FILE%  >>%ERROR_LOG% 2>&1
+	%BIN_LUMPMOD% %WAD_FILE% extract "!LUMP_NAME!" %FILE%  >>%ERROR_LOG% 2>&1
 	REM # only continue if this succeeded:
 	REM # (do not allow a containing PK3/WAD file to be cached)
 	REM # TODO: display the file status line to show a lumpmod error?
@@ -892,7 +808,7 @@ EXIT /B 0
 		CALL :log_echo "!LUMP_NAME!"
 		CALL :log_echo
 		CALL :log_echo "From WAD:"
-		CALL :log_echo "!TEMP_WAD!"
+		CALL :log_echo "!WAD_FILE!"
 		CALL :log_echo
 		GOTO :lump_error
 	)
@@ -913,7 +829,7 @@ EXIT /B 0
 	IF %NEWSIZE% GEQ %LUMP_SIZE% GOTO :lump_return
 	
 	REM # put the lump back into the WAD
-	%BIN_LUMPMOD% %TEMP_WAD% update "!LUMP_NAME!" %FILE%  >>%ERROR_LOG% 2>&1
+	%BIN_LUMPMOD% %WAD_FILE% update "!LUMP_NAME!" %FILE%  >>%ERROR_LOG% 2>&1
 	REM # if that errored we won't cache the WAD
 	IF ERRORLEVEL 1 (
 		CALL :log_echo
@@ -921,14 +837,15 @@ EXIT /B 0
 		CALL :log_echo '!FILE!'
 		CALL :log_echo
 		CALL :log_echo "Into WAD file:"
-		CALL :log_echo "!TEMP_WAD!"
+		CALL :log_echo "!WAD_FILE!"
 		CALL :log_echo
 		GOTO :lump_error
 	)
 	REM # exit with the result
 	GOTO :lump_return
 	
-	:lump_skip
+:lump_skip
+	REM #-------------------------------------------------------------------
 	REM # the lump can't/won't be optimized, show a dot on screen to
 	REM # demonstrate progress. if the split line hasn't been shown yet,
 	REM # do so now
@@ -937,13 +854,15 @@ EXIT /B 0
 	CALL :dot
 	GOTO :lump_return
 	
-	:lump_error
+:lump_error
+	REM #-------------------------------------------------------------------
 	SET ERROR=1
 	REM # add file to the error cache,
 	REM # this can be used to ignore faulty files in the future
 	CALL :hash_add_error
 
-	:lump_return
+:lump_return
+	REM #-------------------------------------------------------------------
 	REM # return our error-state
 	(ENDLOCAL
 		SET ANY=%ANY%
