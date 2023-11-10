@@ -603,8 +603,11 @@ int main(int argc, char *argv[]) {
                         else if(data[0] == 0xFF && data[1] == 0xD8 
                                 && data[2] == 0xFF)
                             format = "JPG";
-		    // kroc: wrap the name in quotes
-		    sprintf(lumpname_quotes, "\"%s\"", get_lump_name(curlump->cl));
+                        else if(data[0] == 0x4F && data[1] == 0x67 
+                                && data[2] == 0x67)
+                            format = "OGG";
+                    // kroc: wrap the name in quotes
+                    sprintf(lumpname_quotes, "\"%s\"", get_lump_name(curlump->cl));
                     printf("%5i %-10s %9li %s\n", i, lumpname_quotes, curlump->cl->len, format);
                 }
                 else printf("%s\n", get_lump_name(curlump->cl));

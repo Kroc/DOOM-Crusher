@@ -1,6 +1,9 @@
 # exclude anything beginning with double-underscore
 __**
 
+# compilation artefacts
+*.o
+
 # ignore the log file we generate
 log*.txt
 *.log

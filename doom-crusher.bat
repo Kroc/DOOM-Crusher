@@ -27,6 +27,7 @@ IF "%~1" == "" (
 	ECHO:
 	ECHO     /NOPNG   : Skip processing PNG files
 	ECHO     /NOJPG   : Skip processing JPG files
+	ECHO     /NOOGG   : Skip processing OGG files
 	ECHO     /NOWAD   : Skip processing WAD/IWAD files
 	ECHO     /NOPK3   : Skip processing PK3/IPK3/PKE/EPK/KART files
 	ECHO     /NOZIP   : Skip processing ZIP files
@@ -55,6 +56,7 @@ SET DOT=0
 REM # default options
 SET DO_PNG=1
 SET DO_JPG=1
+SET DO_OGG=1
 SET DO_WAD=1
 SET DO_PK3=1
 SET DO_ZIP=1
@@ -84,6 +86,13 @@ REM # use "/NOJPG" to disable JPEG processing
 IF /I "%~1" == "/NOJPG" (
 	REM # turn off JPEG processing
 	SET DO_JPG=0
+	REM # check for more options
+	SHIFT & GOTO :options
+)
+REM # use "/NOOGG" to disable OGG processing
+IF /I "%~1" == "/NOOGG" (
+	REM # turn off OGG processing
+	SET DO_OGG=0
 	REM # check for more options
 	SHIFT & GOTO :options
 )
@@ -160,14 +169,16 @@ REM # program for generating and verifying checksums:
 IF %WINBIT% EQU 64 SET BIN_HASH="%BIN%\md5deep\sha1deep64.exe"
 IF %WINBIT% EQU 32 SET BIN_HASH="%BIN%\md5deep\sha1deep.exe"
 
-REM # 7Zip executable (64-bit)
-SET BIN_7ZA="%BIN%\7za\7za.exe"
 REM # location of the jpegtran executable
 SET BIN_JPEG="%BIN%\jpegtran\jpegtran.exe"
 REM # location of the oxipng executable
 SET BIN_OXIPNG="%BIN%\oxipng\oxipng.exe"
 REM # location of the pngquant executable
 SET BIN_PNGQUANT="%BIN%\pngquant\pngquant.exe"
+REM # location of the optivorbis executable
+SET BIN_OPTIVORBIS="%BIN%\optivorbis\optivorbis.exe"
+REM # 7Zip executable (64-bit)
+SET BIN_7ZA="%BIN%\7za\7za.exe"
 REM # location of the advzip executable
 SET BIN_ADVZIP="%BIN%\advancecomp\advzip.exe"
 REM # location of the wadptr executable
@@ -175,47 +186,8 @@ SET BIN_WADPTR="%BIN%\wadptr\wadptr.exe"
 REM # location of the lumpmod executable
 SET BIN_LUMPMOD="%BIN%\lumpmod\lumpmod.exe"
 
-REM # logging:
+REM # temp folder:
 REM #---------------------------------------------------------------------------
-REM # location of log file
-SET LOG_FILE="%BIN%\log.txt"
-REM # clear the log file
-IF EXIST %LOG_FILE% DEL /F %LOG_FILE% >NUL 2>&1
-REM # failed?
-IF ERRORLEVEL 1 (
-	ECHO ERROR! Could not clear the log file at:
-	ECHO %LOG_FILE%
-	EXIT /B 1
-)
-REM # location of error log
-SET ERROR_LOG="%BIN%\error.log"
-REM # clear the log file
-IF EXIST %ERROR_LOG% DEL /F %ERROR_LOG% >NUL 2>&1
-REM # failed?
-IF ERRORLEVEL 1 (
-	ECHO ERROR! Could not clear the log file at:
-	ECHO %ERROR_LOG%
-	EXIT /B 1
-)
-
-ECHO:
-CALL :log_echo "# doom-crusher : v%VER%"
-CALL :log_echo "#     feedback : github.com/Kroc/DOOM-Crusher or kroc@camendesign.com"
-REM # display which options have been set
-SET "OPTIONS="
-IF %DO_PNG% EQU 0 SET "OPTIONS=%OPTIONS%/NOPNG "
-IF %DO_JPG% EQU 0 SET "OPTIONS=%OPTIONS%/NOJPG "
-IF %DO_WAD% EQU 0 SET "OPTIONS=%OPTIONS%/NOWAD "
-IF %DO_PK3% EQU 0 SET "OPTIONS=%OPTIONS%/NOPK3 "
-IF %DO_ZIP% EQU 0 SET "OPTIONS=%OPTIONS%/NOZIP "
-IF %LOSSY%  EQU 1 SET "OPTIONS=%OPTIONS%/LOSSY "
-IF %ZSTORE% EQU 1 SET "OPTIONS=%OPTIONS%/ZSTORE "
-IF NOT DEFINED CACHE SET "OPTIONS=%OPTIONS%/NOCACHE"
-IF DEFINED OPTIONS (
-	CALL :log_echo "#      options : %OPTIONS%"
-)
-CALL :log_echo "###############################################################################"
-
 REM # create a temporary folder for all temp files this process creates.
 REM # this will allow (though it's not recommended) more than one instance
 REM # of "doom-crusher.bat" to run simultaneously
@@ -234,13 +206,55 @@ REM SET "TEMP_DIR=%HERE%\temp\%TEMP_SLUG%"
 SET "TEMP_DIR=%TEMP%\doom-crusher-%TEMP_SLUG%"
 
 REM # try create the directory
-MKDIR "%TEMP_DIR%"  >>%ERROR_LOG% 2>&1
+IF NOT EXIST "%TEMP_DIR%" MKDIR "%TEMP_DIR%"  >NUL 2>&1
 REM # did that fail?
 IF ERRORLEVEL 1 (
 	ECHO ERROR! Could not create temporary directory:
 	ECHO "%TEMP_DIR%"
 	EXIT /B 1
 )
+
+REM # logging:
+REM #---------------------------------------------------------------------------
+REM # location of log file
+SET LOG_FILE="%TEMP_DIR%\stdout.log"
+REM # clear the log file
+IF EXIST %LOG_FILE% DEL /F %LOG_FILE%  >NUL 2>&1
+REM # failed?
+IF ERRORLEVEL 1 (
+	ECHO ERROR! Could not clear the log file at:
+	ECHO %LOG_FILE%
+	EXIT /B 1
+)
+REM # location of error log
+SET ERROR_LOG="%TEMP_DIR%\stderr.log"
+REM # clear the log file
+IF EXIST %ERROR_LOG% DEL /F %ERROR_LOG%  >NUL 2>&1
+REM # failed?
+IF ERRORLEVEL 1 (
+	ECHO ERROR! Could not clear the log file at:
+	ECHO %ERROR_LOG%
+	EXIT /B 1
+)
+
+ECHO:
+CALL :log_echo "# doom-crusher : v%VER%"
+CALL :log_echo "#     feedback : github.com/Kroc/DOOM-Crusher or kroc@camendesign.com"
+REM # display which options have been set
+SET "OPTIONS="
+IF %DO_PNG% EQU 0 SET "OPTIONS=%OPTIONS%/NOPNG "
+IF %DO_JPG% EQU 0 SET "OPTIONS=%OPTIONS%/NOJPG "
+IF %DO_OGG% EQU 0 SET "OPTIONS=%OPTIONS%/NOOGG "
+IF %DO_WAD% EQU 0 SET "OPTIONS=%OPTIONS%/NOWAD "
+IF %DO_PK3% EQU 0 SET "OPTIONS=%OPTIONS%/NOPK3 "
+IF %DO_ZIP% EQU 0 SET "OPTIONS=%OPTIONS%/NOZIP "
+IF %LOSSY%  EQU 1 SET "OPTIONS=%OPTIONS%/LOSSY "
+IF %ZSTORE% EQU 1 SET "OPTIONS=%OPTIONS%/ZSTORE "
+IF NOT DEFINED CACHE SET "OPTIONS=%OPTIONS%/NOCACHE"
+IF DEFINED OPTIONS (
+	CALL :log_echo "#      options : %OPTIONS%"
+)
+CALL :log_echo "###############################################################################"
 
 REM # we'll change the window title during processing
 SET "TITLE=doom-crusher.bat"
@@ -333,6 +347,7 @@ EXIT /B 0
 	SET "FILTER=*.lmp;*."
 	IF %DO_PNG% EQU 1 SET "FILTER=*.png;%FILTER%"
 	IF %DO_JPG% EQU 1 SET "FILTER=*.jpg;*.jpeg;%FILTER%"
+	IF %DO_OGG% EQU 1 SET "FILTER=*.ogg;*.oga;%FILTER%"
 	IF %DO_WAD% EQU 1 SET "FILTER=*.wad;*.iwad;%FILTER%"
 	IF %DO_PK3% EQU 1 SET "FILTER=*.pk3;*.ipk3;*.pke;*.epk;*.kart;%FILTER%"
 	IF %DO_ZIP% EQU 1 SET "FILTER=*.zip;%FILTER%"
@@ -395,6 +410,7 @@ EXIT /B 0
 	REM # files that we are automatically skipping
 	IF "%TYPE%-%DO_JPG%" == "jpg-0" GOTO :file_ignored
 	IF "%TYPE%-%DO_PNG%" == "png-0" GOTO :file_ignored
+	IF "%TYPE%-%DO_OGG%" == "ogg-0" GOTO :file_ignored
 	IF "%TYPE%-%DO_WAD%" == "wad-0" GOTO :file_ignored
 	IF "%TYPE%-%DO_PK3%" == "pk3-0" GOTO :file_ignored
 	IF "%TYPE%-%DO_ZIP%" == "zip-0" GOTO :file_ignored
@@ -419,7 +435,7 @@ EXIT /B 0
 	REM # get the new file-size, post optimisation
 	FOR %%G IN (%FILE%) DO SET FILESIZE_NEW=%%~zG
 	REM # file increased in size?
-	IF %FILESIZE_NEW% GTR %FILESIZE_OLD% GOTO :file_return
+	IF %FILESIZE_NEW% GEQ %FILESIZE_OLD% GOTO :file_return
 	
 	REM # file has changed, add to the cache
 	CALL :hash_add
@@ -485,9 +501,10 @@ EXIT /B 0
 	REM # display file name and current file size
 	CALL :display_status_left
 	
-	REM # if we are skipping WADs, PNGs & JPGs, then there are no resources
-	REM # inside a PK3 we can process -- skip ahead to advzip optimisation
-	IF "%DO_WAD%-%DO_PNG%-%DO_JPG%" == "0-0-0" GOTO :optimize_pk3_advzip
+	REM # if we are skipping WADs, PNGs, JPGs & OGGs then there are no
+	REM # resources in a PK3 we can process -- skip ahead to advzip
+	REM # optimisation
+	IF "%DO_WAD%-%DO_PNG%-%DO_JPG%-%DO_OGG%" == "0-0-0-0" GOTO :optimize_pk3_advzip
 
 	REM #-------------------------------------------------------------------
 	REM # get the file name without losing special characters
@@ -677,10 +694,10 @@ EXIT /B 0
 	REM # path to be able to return the lump to the WAD
 	SET WAD_FILE=%FILE%
 	
-	REM # if we are skipping PNGs & JPGs, then there are no resources
+	REM # if we are skipping PNGs, JPGs & OGGs, then there are no resources
 	REM # inside a WAD we can process (WADs cannot contain WADs,
 	REM # unlike PK3s) -- skip ahead to wadptr optimisation
-	IF "%DO_PNG%-%DO_JPG%" == "0-0" GOTO :optimize_wadptr
+	IF "%DO_PNG%-%DO_JPG%-%DO_OGG%" == "0-0-0" GOTO :optimize_wadptr
 
 	REM # list the WAD contents and get the name and length of each lump:
 	REM # lumpmod.exe has been modified to also provide the filetype, with
@@ -728,7 +745,7 @@ EXIT /B 0
 	)
 	
 	ENDLOCAL & SET DOT=0 & EXIT /B %ERROR%
-	
+
 :optimize_lump
 	REM #===================================================================
 	REM # optimize a WAD lump
@@ -750,12 +767,14 @@ EXIT /B 0
 	IF "%LUMP_SIZE%" == "0" GOTO :lump_skip
 	
 	REM # extract lump data type from record ("PNG", "JPG" or "LMP")
+	REM # TODO: this does not detect OGG files without extentsion
 	SET "LUMP_TYPE=!LUMPINFO:~27,3!"
 	REM # only process JPG or PNG lumps
 	IF "%LUMP_TYPE%" == "LMP" GOTO :lump_skip
-	REM # are we ignoring JPG / PNGs?
+	REM # are we ignoring JPG / PNGs / OGGs?
 	IF "%LUMP_TYPE%-%DO_JPG%" == "JPG-0" GOTO :lump_skip
 	IF "%LUMP_TYPE%-%DO_PNG%" == "PNG-0" GOTO :lump_skip
+	IF "%LUMP_TYPE%-%DO_OGG%" == "OGG-0" GOTO :lump_skip
 	
 	REM # extract fields from the lumpmod record:
 	SET LUMP_ID=!LUMPINFO:~0,5!
@@ -1005,13 +1024,69 @@ EXIT /B 0
 	REM # return the error state
 	EXIT /B %ERRORLEVEL%
 
+:optimize_ogg
+	REM #===================================================================
+	REM # optimise OGG (audio) files
+	REM #
+	REM #	`FILE` - the desired file-path
+	REM #
+	REM # returns ERRORLEVEL 0 if optimisation
+	REM # succeeded, ERRORLEVEL 1 if it failed
+	REM #-------------------------------------------------------------------
+	REM # display file name and current file size
+	CALL :display_status_left
+	
+	REM # optimise with optivorbis (lossless)
+	CALL :optimize_optivorbis
+	REM # if that failed:
+	IF ERRORLEVEL 1 (
+		REM # cap the status line
+		CALL :display_status_msg "! error [optivorbis]"
+		REM # add file to the error cache,
+		REM # this can be used to ignore faulty files in the future
+		CALL :hash_add_error
+		REM # return with error so the OGG file is not cached
+		SET DOT=0 & EXIT /B 1
+	) ELSE (
+		REM # cap status line with the new file size
+		CALL :display_status_right
+	)
+	REM # return no-error
+	SET DOT=0 & EXIT /B 0
+
+
+:optimize_optivorbis
+	REM #===================================================================
+	REM # optimise the given OGG file
+	REM #
+	REM #	`FILE` - the desired file-path
+	REM #
+	REM # returns ERRORLEVEL 0 if successful (or optivorbis not present),
+	REM # or ERRORLEVEL 1 for an error
+	REM #-------------------------------------------------------------------
+	REM # skip if not present
+	IF NOT EXIST %BIN_OPTIVORBIS% EXIT /B 0
+
+	REM # optivorbis:
+	REM # 	-q	: quiet
+	REM # 	-r ...	: set remuxer
+	%BIN_OPTIVORBIS% -r ogg2ogg %FILE% "%TEMP_DIR%\optivorbis.ogg"  >>%ERROR_LOG% 2>&1
+	IF ERRORLEVEL 1 EXIT /B %ERRORLEVEL%
+
+	REM # copy the updated file back
+	COPY /Y "%TEMP_DIR%\optivorbis.ogg" %FILE%  >>%ERROR_LOG% 2>&1
+	REM # return the result of that
+	REM # (if copy failed, the original OGG file is unchanged)
+	EXIT /B %ERRORLEVEL%
+
+
 :optimize_advzip
 	REM #===================================================================
 	REM # optimise ZIP and ZIP-like files
 	REM #
 	REM #	`FILE` - the desired file-path
 	REM #
-	REM # returns ERRORLEVEL 0 if successful (or deflopt not present),
+	REM # returns ERRORLEVEL 0 if successful (or advzip not present),
 	REM # or ERRORLEVEL 1 for an error
 	REM #-------------------------------------------------------------------
 	REM # skip if not present
@@ -1033,7 +1108,7 @@ EXIT /B 0
 	REM #
 	REM #	`FILE` - the desired file-path
 	REM #
-	REM # returns "jpg", "png", "wad"/"iwad", "pk3" for known types,
+	REM # returns "jpg", "png", "ogg", "wad"/"iwad", "pk3" for known types,
 	REM # or "" for unknown type in the `TYPE` variable
 	REM #-------------------------------------------------------------------
 	REM # by default, return blank
@@ -1049,6 +1124,8 @@ EXIT /B 0
 	IF /I "%EXT%" == ".jpg"  SET "TYPE=jpg" & GOTO:EOF
 	IF /I "%EXT%" == ".jpeg" SET "TYPE=jpg" & GOTO:EOF
 	IF /I "%EXT%" == ".png"  SET "TYPE=png" & GOTO:EOF
+	IF /I "%EXT%" == ".ogg"  SET "TYPE=ogg" & GOTO:EOF
+	IF /I "%EXT%" == ".oga"  SET "TYPE=ogg" & GOTO:EOF
 	REM # zip files are recompressed, but not unpacked and recursed
 	IF /I "%EXT%" == ".zip"  SET "TYPE=zip" & GOTO:EOF
 	REM # recognize modern DOOM archive files by their extension
